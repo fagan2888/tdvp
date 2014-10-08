@@ -9,31 +9,29 @@ np.set_printoptions(suppress=True, precision=3)
 length = 4
 chi = 3
 d = 2
-#"""
+
 MPS = [np.random.rand(chi*d*chi) for n in range(length)]
 #MPS = [(n-(length-1)/2.0)*np.ones(chi*d*chi) for n in range(length)]
 print MPS
 
 for n in range(length):
     MPS[n] = MPS[n].reshape((chi * d, chi))
-
-zrows = np.zeros((chi*d-chi, chi))
-
-for n in range(length):
     Q, R = linalg.qr(MPS[n], mode='economic')
     MPS[n] = Q.copy()
     print "R[",n,"] =", R
 
     if(n != length-1):
-        R = np.vstack((R, zrows))
-        MPS[n+1] = R * MPS[n+1]
+        MPS[n+1] = MPS[n+1].reshape((chi, chi * d))
+        MPS[n+1] = np.dot(R, MPS[n+1])
+        MPS[n+1] = MPS[n+1].reshape((chi * d * chi))
     del Q, R
 
 for n in range(length):
     print "MPS[",n,"] =", MPS[n]
-
-dot = np.dot(MPS[0][:,0], MPS[0][:,1])
-print "dot =", round(dot, 10)
+    i = np.random.randint(0, chi)
+    j = np.random.randint(0, chi)
+    dot = np.dot(MPS[n][:,i], MPS[n][:,j])
+    print "dot =", i, j, round(dot, 10)
 
 """
 del R
