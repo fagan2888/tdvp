@@ -7,31 +7,54 @@ import cmath
 np.set_printoptions(suppress=True, precision=3)
 
 length = 4
-chi = 3
 d = 2
+chi = 3
 
 chir = [chi for n in range(length)]
 chic = [chi for n in range(length)]
-#chir[0] = chic[length-1] = 1
+chir[0] = chic[length-1] = 1
 print "chir =", chir
 print "chic =", chic
 
-MPS = [np.random.rand(chir[n] * d * chic[n]) for n in range(length)]
+MPS = [np.random.rand(chir[n], chic[n], d) for n in range(length)]
 print "MPS =", MPS
 
 for n in range(length):
+    print "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
+    print "MPS shape", MPS[n].shape
+    MPS[n] = np.transpose(MPS[n], (0, 2, 1))
+    print "MPS shape", MPS[n].shape
     MPS[n] = MPS[n].reshape((chir[n] * d, chic[n]))
-    Q, R = linalg.qr(MPS[n], mode='economic')
+    print "MPS shape", MPS[n].shape
+
+    Q, R = np.linalg.qr(MPS[n])
+
     MPS[n] = Q.copy()
+    aux, chic[n] = MPS[n].shape
+
+    i = np.random.randint(0, chic[n])
+    j = np.random.randint(0, chic[n])
+    dot = np.dot(Q[:,i], Q[:,j])
+    print "dot =", i, j, round(dot, 10)
+
+    print "MPS shape", MPS[n].shape
+    MPS[n] = MPS[n].reshape((chir[n], d, chic[n]))
+    print "MPS shape", MPS[n].shape
+    MPS[n] = np.transpose(MPS[n], (0, 2, 1))
+    print "MPS shape", MPS[n].shape
+
     print "Q[",n,"] =", Q
     print "R[",n,"] =", R
 
     if(n != length-1):
-        MPS[n+1] = MPS[n+1].reshape((chir[n+1], chic[n+1] * d))
-        MPS[n+1] = np.dot(R, MPS[n+1])
-        print "shape =", MPS[n+1].shape, chir[n+1], chic[n+1], d
-        MPS[n+1] = MPS[n+1].reshape((chir[n+1] * d * chic[n+1]))
-    del Q, R
+        print "shape =", MPS[n+1].shape
+        MPS[n+1] = np.tensordot(R, MPS[n+1], axes=([1, 0]))
+        chir[n+1], aux, aux = MPS[n+1].shape
+        print "shape =", MPS[n+1].shape
+    del Q, R, aux
+
+exit()
+
 
 for n in range(length):
     print "MPS[",n,"] =", MPS[n]
