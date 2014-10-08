@@ -4,11 +4,14 @@ import numpy as np
 from scipy import linalg
 import cmath
 
+np.set_printoptions(suppress=True, precision=3)
+
 length = 4
 chi = 3
 d = 2
 #"""
 MPS = [np.random.rand(chi*d*chi) for n in range(length)]
+#MPS = [(n-(length-1)/2.0)*np.ones(chi*d*chi) for n in range(length)]
 print MPS
 
 for n in range(length):
@@ -17,10 +20,14 @@ for n in range(length):
 zrows = np.zeros((chi*d-chi, chi))
 
 for n in range(length):
-    MPS[n], R = linalg.qr(MPS[n], mode='economic')
+    Q, R = linalg.qr(MPS[n], mode='economic')
+    MPS[n] = Q.copy()
+    print "R[",n,"] =", R
+
     if(n != length-1):
         R = np.vstack((R, zrows))
         MPS[n+1] = R * MPS[n+1]
+    del Q, R
 
 for n in range(length):
     print "MPS[",n,"] =", MPS[n]
