@@ -10,26 +10,33 @@ length = 4
 chi = 3
 d = 2
 
-MPS = [np.random.rand(chi*d*chi) for n in range(length)]
-#MPS = [(n-(length-1)/2.0)*np.ones(chi*d*chi) for n in range(length)]
-print MPS
+chir = [chi for n in range(length)]
+chic = [chi for n in range(length)]
+#chir[0] = chic[length-1] = 1
+print "chir =", chir
+print "chic =", chic
+
+MPS = [np.random.rand(chir[n] * d * chic[n]) for n in range(length)]
+print "MPS =", MPS
 
 for n in range(length):
-    MPS[n] = MPS[n].reshape((chi * d, chi))
+    MPS[n] = MPS[n].reshape((chir[n] * d, chic[n]))
     Q, R = linalg.qr(MPS[n], mode='economic')
     MPS[n] = Q.copy()
+    print "Q[",n,"] =", Q
     print "R[",n,"] =", R
 
     if(n != length-1):
-        MPS[n+1] = MPS[n+1].reshape((chi, chi * d))
+        MPS[n+1] = MPS[n+1].reshape((chir[n+1], chic[n+1] * d))
         MPS[n+1] = np.dot(R, MPS[n+1])
-        MPS[n+1] = MPS[n+1].reshape((chi * d * chi))
+        print "shape =", MPS[n+1].shape, chir[n+1], chic[n+1], d
+        MPS[n+1] = MPS[n+1].reshape((chir[n+1] * d * chic[n+1]))
     del Q, R
 
 for n in range(length):
     print "MPS[",n,"] =", MPS[n]
-    i = np.random.randint(0, chi)
-    j = np.random.randint(0, chi)
+    i = np.random.randint(0, chic[n])
+    j = np.random.randint(0, chic[n])
     dot = np.dot(MPS[n][:,i], MPS[n][:,j])
     print "dot =", i, j, round(dot, 10)
 
