@@ -8,7 +8,7 @@ np.set_printoptions(suppress=True, precision=3)
 
 #left-canonical orthonormalization
 def leftNormalization(MPS, chir, chic):
-    """Returns a left-normalized MPS
+    """Returns a left-normalized MPS.
     """
     for n in range(length):
         print "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$", n
@@ -46,7 +46,7 @@ def leftNormalization(MPS, chir, chic):
 
 #right-canonical orthonormalization
 def rightNormalization(MPS, chir, chic):
-    """Returns a left-normalized MPS
+    """Returns a left-normalized MPS.
     """
     for n in range(length):
         ip = length-n-1
@@ -88,38 +88,126 @@ def rightNormalization(MPS, chir, chic):
             print "shape =", MPS[ip-1].shape, chir[ip-1], chic[ip-1]
             del Q, R, aux
 
+def buildLocalH():
+    """Builds local hamiltonian (dxd matrix).
+
+    This function should call several ones depending on the 
+    number of terms in H.
+    Returns a list of local hamiltonians, where each term 
+    is a (d, d, d, d)-rank tensor.
+    """
+    localH = np.zeros((d, d, d, d))
+    localH[0,0,0,0] = localH[1,1,1,1] = 1./4.
+    localH[0,1,0,1] = localH[1,0,1,0] = -1./4.
+    localH[1,0,0,1] = localH[0,1,1,0] = 1./2.
+    h = [localH for n in range(length)]
+
+    return h
+
+def buildHElements(MPS, H):
+    """Builds the matrix elements of the hamiltonian.
+
+    Not sure how many of these are: N or N-1?
+    Returns a tensor of the form C[a, b, s, t].
+    """
+    C = []
+
+    for n in range(length-1):
+        AA = np.tensordot(MPS[n], MPS[n+1], axes=([1,0]))
+        tmp = np.tensordot(H[n], AA, axes=([2,3], [1,3]))
+        tmp = np.transpose(tmp, (2, 3, 0, 1))
+        C.append(tmp)
+
+    return C
+
+def calcLs(MPS):
+    """Calculates the list of L matrices.
+
+    Association of matrix multiplication different as in calcRs.
+    """
+    L = []#np.ones((1,1))]
+
+    for n in range(length):
+        if(n == 0):
+            LA = MPS[n]
+        else:
+            LA = np.tensordot(L[n-1], MPS[n], axes=([1,0]))
+
+        A = np.transpose(MPS[n], (1, 0, 2))
+        A = np.conjugate(A)
+        tmp = np.tensordot(A, LA, axes=([1,2], [0,2]))
+        print "A =", MPS[n].shape, "LA =", LA.shape, "tmp =", tmp.shape
+        print tmp
+        L.append(tmp)
+
+    return L
+
+def calcRs(MPS):
+    """Calculates the list of R matrices.
+
+    Appends the R's as in calcLs and then reverses the list.
+    The multiplication of the matrices is associated differently.
+    """
+    R = []#np.ones((1,1))]
+
+    for n in range(length):
+        ip = length-n-1; #print "ip =", ip
+
+        if(n == 0):
+            AR = MPS[ip]
+            AR = np.transpose(AR, (0, 2, 1))
+        else:
+            AR = np.tensordot(MPS[ip], R[n-1], axes=([1,0]))
+
+        A = np.transpose(MPS[ip], (1, 0, 2))
+        A = np.conjugate(A)
+        tmp = np.tensordot(AR, A, axes=([1,2], [2,0]))
+        print "A =", MPS[ip].shape, "AR =", AR.shape, "tmp =", tmp.shape
+        print tmp
+        R.append(tmp)
+    R.reverse()
+
+    return R
+
+def calcHmeanval():
+    """Calculates the matrcies K(n) which give the mean value of H.
+
+    This is done in two steps: one for each term defining K(n).
+    """
+
+    pass
+
+
+
+"""Main...
+"""
 length = 4
 d = 2
-chi = 3
+xi = 3
 
-chir = [chi for n in range(length)]
-chic = [chi for n in range(length)]
-chir[0] = chic[length-1] = 1
-print "chir =", chir
-print "chic =", chic
+xir = [xi for n in range(length)]
+xic = [xi for n in range(length)]
+xir[0] = xic[length-1] = 1
+theMPS = [np.random.rand(xir[n], xic[n], d) for n in range(length)]
+print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
-MPS = [np.random.rand(chir[n], chic[n], d) for n in range(length)]
-print "MPS =", MPS
+leftNormalization(theMPS, xir, xic)
+print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
-rightNormalization(MPS, chir, chic)
-print "chir =", chir
-print "chic =", chic
-print "MPS =", MPS
+rightNormalization(theMPS, xir, xic)
+print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
-leftNormalization(MPS, chir, chic)
-print "chir =", chir
-print "chic =", chic
-print "MPS =", MPS
+theH = buildLocalH()
+print "theH =", theH[0].reshape((d*d, d*d))#"h =", theH
+theC = buildHElements(theMPS, theH)
+print "theC =", len(theC)
+
+theL = calcLs(theMPS)
+print "theL =", len(theL)
+theR = calcRs(theMPS)
+print "theR =", len(theR)
 
 exit()
-
-
-for n in range(length):
-    print "MPS[",n,"] =", MPS[n]
-    i = np.random.randint(0, chic[n])
-    j = np.random.randint(0, chic[n])
-    dot = np.dot(MPS[n][:,i], MPS[n][:,j])
-    print "dot =", i, j, round(dot, 10)
 
 """
 del R
