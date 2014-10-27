@@ -169,14 +169,51 @@ def calcRs(MPS):
 
     return R
 
-def calcHmeanval():
-    """Calculates the matrcies K(n) which give the mean value of H.
+def calcHmeanval(MPS, C):
+    """Computes the matrcies K(n) which give the mean value of H.
 
     This is done in two steps: one for each term defining K(n).
     """
+    dim, aux, aux = MPS[length-1].shape
+    K = [np.zeros((dim,dim))]
 
+    for n in range(length-1):
+        ip = length-n-1-1
+
+        AA = np.tensordot(MPS[ip], MPS[ip+1], axes=([1,0]))
+        AA = np.transpose(AA, (0, 2, 1, 3))
+        AA = np.transpose(AA, (1, 0, 2, 3))
+        AA = np.conjugate(AA)
+        tmp = np.tensordot(C[ip], AA, axes=([1,2,3], [0,2,3]))
+
+        print "shape =", MPS[ip].shape, K[n-1].shape
+        AK = np.tensordot(MPS[ip], K[n-1], axes=([1,0]))
+        A = np.transpose(MPS[ip], (1, 0, 2))
+        A = np.conjugate(A)
+        tmp += np.tensordot(AK, A, axes=([1,2], [2,0]))
+
+        K.append(tmp)
+#        break
+
+    return K
+
+def nullSpaceR(MPS):
+    """Calculates the auxiliary matrix R to get its null space.
+
+    Given a fixed gauge condition the R gets simplified.
+    """
+    for n in range(length):
+        R = np.transpose(MPS[n], (1, 0, 2))
+        R = np.conjugate(R)
+
+        chir, chic, aux = R.shape
+        R = np.transpose(R, (0, 2, 1))
+        R = np.reshape(R, (chir * aux, chic))
+
+        U, W, V = np.linalg.svd(R, full_matrices=False)
+        U.shape, W.shape, V.shape
+        #get VL from V and check dimensions and R+ * V+ = 0
     pass
-
 
 
 """Main...
@@ -206,6 +243,8 @@ theL = calcLs(theMPS)
 print "theL =", len(theL)
 theR = calcRs(theMPS)
 print "theR =", len(theR)
+
+theK = calcHmeanval(theMPS, theC)
 
 exit()
 

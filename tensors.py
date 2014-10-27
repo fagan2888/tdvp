@@ -116,6 +116,7 @@ def buildHElements(MPS, H):
         AA = np.tensordot(MPS[n], MPS[n+1], axes=([1,0]))
         tmp = np.tensordot(H[n], AA, axes=([2,3], [1,3]))
         tmp = np.transpose(tmp, (2, 3, 0, 1))
+
         C.append(tmp)
 
     return C
@@ -138,6 +139,7 @@ def calcLs(MPS):
         tmp = np.tensordot(A, LA, axes=([1,2], [0,2]))
         print "A =", MPS[n].shape, "LA =", LA.shape, "tmp =", tmp.shape
         print tmp
+
         L.append(tmp)
 
     return L
@@ -164,10 +166,41 @@ def calcRs(MPS):
         tmp = np.tensordot(AR, A, axes=([1,2], [2,0]))
         print "A =", MPS[ip].shape, "AR =", AR.shape, "tmp =", tmp.shape
         print tmp
-        R.append(tmp)
-    R.reverse()
 
+        R.append(tmp)
+
+    R.reverse()
     return R
+
+def calcHmeanval(MPS, C):
+    """Computes the matrcies K(n) which give the mean value of H.
+
+    This is done in two steps: one for each term defining K(n).
+    """
+    dim, aux, aux = MPS[length-1].shape
+    K = [np.zeros((dim,dim))]
+
+    for n in range(length-1):
+        ip = length-n-1-1
+
+        AA = np.tensordot(MPS[ip], MPS[ip+1], axes=([1,0]))
+        AA = np.transpose(AA, (0, 2, 1, 3))
+        AA = np.transpose(AA, (1, 0, 2, 3))
+        AA = np.conjugate(AA)
+        tmp = np.tensordot(C[ip], AA, axes=([1,2,3], [0,2,3]))
+
+#        print "shape =", MPS[ip].shape, K[n].shape
+        AK = np.tensordot(MPS[ip], K[n], axes=([1,0]))
+        A = np.transpose(MPS[ip], (1, 0, 2))
+        A = np.conjugate(A)
+        tmp += np.tensordot(AK, A, axes=([1,2], [2,0]))
+        print "shape =", n, ip, tmp.shape
+
+        K.append(tmp)
+
+    K.reverse()
+    print K
+    return K
 
 
 
@@ -198,6 +231,8 @@ theL = calcLs(theMPS)
 print "theL =", len(theL)
 theR = calcRs(theMPS)
 print "theR =", len(theR)
+
+theK = calcHmeanval(theMPS, theC)
 
 exit()
 
