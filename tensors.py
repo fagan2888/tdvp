@@ -220,20 +220,19 @@ def nullSpaceR(MPS):
         R = np.reshape(R, (chir * aux, chic))
         U, S, V = np.linalg.svd(R, full_matrices=True)
 
-        if((chir * aux) != chic): #not square
-            dimS, = S.shape
-            VRdag = U[:,dimS:]
-        else: #square matrix
-            mask = (S < epsS) #try: np.select(...)
-            VRdag = np.compress(mask, U, axis=1)
+        dimS, = S.shape
+        extraS = np.zeros((chir * aux) - dimS)
+        Sp = np.append(S, extraS, 0)
+        mask = (Sp < epsS) #try: np.select(...)
+        VRdag = np.compress(mask, U, axis=1)
 
         R = np.conjugate(np.transpose(R))
         Null = np.tensordot(R, VRdag, axes=([1,0]))
         #VR.append(VRdag.size)
         VR.append(np.transpose(VRdag))
 
-        print "D =", n, R.T.shape, U.shape, S.shape, V.shape, VRdag.shape
-        print U; print S; print VRdag; print Null
+        print "D =", n, R.T.shape, U.shape, Sp.shape, V.shape, VRdag.shape
+        print U; print Sp; print VRdag; print Null
 
     return VR
 
