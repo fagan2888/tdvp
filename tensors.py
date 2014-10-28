@@ -248,7 +248,9 @@ def calcFs(MPS, C, L, K, VR):
 
         if(n == 0): tmpL = np.ones((1,1))
         else:       tmpL = L[n-1]
-        tmpL = scipy.linalg.sqrtm(tmpL)
+        #tmpL = np.linalg.inv(tmpL)
+        bla, aux = np.linalg.eigh(tmpL)
+        print bla
 
         if(n < length-1):
             pass
@@ -267,16 +269,14 @@ d = 2
 xi = 3
 epsS = 1e-15
 
-xir = [xi for n in range(length)]
-xic = [xi for n in range(length)]
-xir[0] = xic[length-1] = 1
+pwr = map(int, [-np.abs(n-length/2.)+length/2. for n in range(length)])
+xir = [d**pwr[n] if d**pwr[n] < xi else xi for n in range(length)]
+xic = np.roll(xir, -1).tolist()
 theMPS = [np.random.rand(xir[n], xic[n], d) for n in range(length)]
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
-exit()
-
-leftNormalization(theMPS, xir, xic)
-print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
+#leftNormalization(theMPS, xir, xic)
+#print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
 rightNormalization(theMPS, xir, xic)
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
@@ -296,6 +296,8 @@ print "theK =", theK
 
 theVR = nullSpaceR(theMPS)
 print "theVR =", map(np.size, theVR)#, theVR
+
+calcFs(theMPS, theC, theL, theK, theVR)
 
 exit()
 
