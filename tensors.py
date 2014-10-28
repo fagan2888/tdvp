@@ -1,7 +1,7 @@
 #/usr/bin/python
 
 import numpy as np
-#from scipy import linalg
+from scipy import linalg
 import cmath
 
 np.set_printoptions(suppress=True, precision=3)
@@ -236,6 +236,28 @@ def nullSpaceR(MPS):
 
     return VR
 
+def calcFs(MPS, C, L, K, VR):
+    """Returns the list of matrices x*(n) = F(n).
+
+    Is it necessary to invert the L/R matrices? A way to void it?
+    """
+    F = []
+
+    for n in range(length):
+        VRdag = np.conjugate(VR[n].T)
+
+        if(n == 0): tmpL = np.ones((1,1))
+        else:       tmpL = L[n-1]
+        tmpL = scipy.linalg.sqrtm(tmpL)
+
+        if(n < length-1):
+            pass
+        if(n > 0):
+            pass
+        if(n < length-2):
+            pass
+
+    return F
 
 
 """Main...
@@ -250,6 +272,8 @@ xic = [xi for n in range(length)]
 xir[0] = xic[length-1] = 1
 theMPS = [np.random.rand(xir[n], xic[n], d) for n in range(length)]
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
+
+exit()
 
 leftNormalization(theMPS, xir, xic)
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
@@ -271,7 +295,7 @@ theK = calcHmeanval(theMPS, theC)
 print "theK =", theK
 
 theVR = nullSpaceR(theMPS)
-print "theVR =", theVR
+print "theVR =", map(np.size, theVR)#, theVR
 
 exit()
 
