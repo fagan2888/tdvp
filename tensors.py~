@@ -1,7 +1,8 @@
 #/usr/bin/python
 
 import numpy as np
-#from scipy import linalg
+import scipy as sp
+from scipy import linalg
 import cmath
 
 np.set_printoptions(suppress=True, precision=3)
@@ -116,6 +117,7 @@ def buildHElements(MPS, H):
         AA = np.tensordot(MPS[n], MPS[n+1], axes=([1,0]))
         tmp = np.tensordot(H[n], AA, axes=([2,3], [1,3]))
         tmp = np.transpose(tmp, (2, 3, 0, 1))
+
         C.append(tmp)
 
     return C
@@ -138,6 +140,7 @@ def calcLs(MPS):
         tmp = np.tensordot(A, LA, axes=([1,2], [0,2]))
         print "A =", MPS[n].shape, "LA =", LA.shape, "tmp =", tmp.shape
         print tmp
+
         L.append(tmp)
 
     return L
@@ -164,9 +167,10 @@ def calcRs(MPS):
         tmp = np.tensordot(AR, A, axes=([1,2], [2,0]))
         print "A =", MPS[ip].shape, "AR =", AR.shape, "tmp =", tmp.shape
         print tmp
-        R.append(tmp)
-    R.reverse()
 
+        R.append(tmp)
+
+    R.reverse()
     return R
 
 def calcHmeanval(MPS, C):
@@ -186,15 +190,16 @@ def calcHmeanval(MPS, C):
         AA = np.conjugate(AA)
         tmp = np.tensordot(C[ip], AA, axes=([1,2,3], [0,2,3]))
 
-        print "shape =", MPS[ip].shape, K[n-1].shape
-        AK = np.tensordot(MPS[ip], K[n-1], axes=([1,0]))
+#        print "shape =", MPS[ip].shape, K[n].shape
+        AK = np.tensordot(MPS[ip], K[n], axes=([1,0]))
         A = np.transpose(MPS[ip], (1, 0, 2))
         A = np.conjugate(A)
         tmp += np.tensordot(AK, A, axes=([1,2], [2,0]))
+        print "shape =", n, ip, tmp.shape
 
         K.append(tmp)
-#        break
 
+    K.reverse()
     return K
 
 def nullSpaceR(MPS):
@@ -209,11 +214,25 @@ def nullSpaceR(MPS):
         chir, chic, aux = R.shape
         R = np.transpose(R, (0, 2, 1))
         R = np.reshape(R, (chir * aux, chic))
+        U, S, V = np.linalg.svd(R, full_matrices=True)
 
-        U, W, V = np.linalg.svd(R, full_matrices=False)
-        U.shape, W.shape, V.shape
-        #get VL from V and check dimensions and R+ * V+ = 0
-    pass
+        #if(matrix_not_squared):
+        dimS, = S.shape
+        VRdag = U[:,dimS:]
+        #else:
+        ##if(squared_matrix_is_full_rank):
+        ##set VR = 0
+        ##else:
+        ##define threshold to get VR from SVD
+
+        R = np.conjugate(np.transpose(R))
+        Null = np.tensordot(R, VRdag, axes=([1,0]))
+
+        print "D =", n, R.T.shape, U.shape, S.shape, V.shape, VRdag.shape
+        print U; print S; print V; print VRdag; print Null
+
+        #what if R is full-rank (or squared)? No update?
+        #'cause VRdag will for sure be empty!
 
 
 """Main...
@@ -245,6 +264,9 @@ theR = calcRs(theMPS)
 print "theR =", len(theR)
 
 theK = calcHmeanval(theMPS, theC)
+print "theK =", theK
+
+nullSpaceR(theMPS)
 
 exit()
 

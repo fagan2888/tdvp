@@ -199,8 +199,43 @@ def calcHmeanval(MPS, C):
         K.append(tmp)
 
     K.reverse()
-    print K
     return K
+
+def nullSpaceR(MPS):
+    """Calculates the auxiliary matrix R to get its null space.
+
+    Given a fixed gauge condition the R gets simplified.
+    Notice that if VR.size = 0 there's no update B[x](n) because
+    VR(n) will be an empty array. However, all the operations
+    associated with VR are still "well-defined".
+    """
+    VR = []
+
+    for n in range(length):
+        R = np.transpose(MPS[n], (1, 0, 2))
+        R = np.conjugate(R)
+        chir, chic, aux = R.shape
+
+        R = np.transpose(R, (0, 2, 1))
+        R = np.reshape(R, (chir * aux, chic))
+        U, S, V = np.linalg.svd(R, full_matrices=True)
+
+        if((chir * aux) != chic): #not square
+            dimS, = S.shape
+            VRdag = U[:,dimS:]
+        else: #square matrix
+            mask = (S < epsS) #try: np.select(...)
+            VRdag = np.compress(mask, U, axis=1)
+
+        R = np.conjugate(np.transpose(R))
+        Null = np.tensordot(R, VRdag, axes=([1,0]))
+        #VR.append(VRdag.size)
+        VR.append(np.transpose(VRdag))
+
+        print "D =", n, R.T.shape, U.shape, S.shape, V.shape, VRdag.shape
+        print U; print S; print VRdag; print Null
+
+    return VR
 
 
 
@@ -209,6 +244,7 @@ def calcHmeanval(MPS, C):
 length = 4
 d = 2
 xi = 3
+epsS = 1e-15
 
 xir = [xi for n in range(length)]
 xic = [xi for n in range(length)]
@@ -233,6 +269,10 @@ theR = calcRs(theMPS)
 print "theR =", len(theR)
 
 theK = calcHmeanval(theMPS, theC)
+print "theK =", theK
+
+theVR = nullSpaceR(theMPS)
+print "theVR =", theVR
 
 exit()
 
