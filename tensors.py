@@ -4,7 +4,7 @@ import numpy as np
 from scipy import linalg
 import cmath
 
-np.set_printoptions(suppress=True, precision=3)
+#np.set_printoptions(suppress=True, precision=3)
 
 #left-canonical orthonormalization
 def leftNormalization(MPS, chir, chic):
@@ -20,24 +20,26 @@ def leftNormalization(MPS, chir, chic):
 
         #Q, R = np.linalg.qr(MPS[n])
         U, S, V = np.linalg.svd(MPS[n], full_matrices=False)
-        SV = np.tensordot(np.diag(S), V)
 
         print "SINGULARS =", S, xi
-        mask = (S != S)
-        print "SINGULARS =", mask
         mask = (S > epsS)
-        print "SINGULARS =", mask
         newXi = mask.tolist().count(True)
+        print "SINGULARS =", mask, newXi
         if(newXi < xi): mask[newXi:] = False
         else: mask[xi:] = False
-        print "SINGULARS =", mask, newXi
+        print "SINGULARS =", mask
 
-        MPS[n] = Q.copy()
+        #MPS[n] = Q.copy()
+        S = np.diag(np.compress(mask, S, 0))
+        V = np.compress(mask, V, 0)
+        MPS[n] = np.compress(mask, U, 1)
         aux, chic[n] = MPS[n].shape
+        SV = np.tensordot(S, V, axes=([1,0]))
 
         i = np.random.randint(0, chic[n])
         j = np.random.randint(0, chic[n])
-        dot = np.dot(Q[:,i], Q[:,j])
+        #dot = np.dot(Q[:,i], Q[:,j])
+        dot = np.dot(U[:,i], U[:,j])
         print "dot =", i, j, round(dot, 10)
 
         print "MPS shape", MPS[n].shape
@@ -46,15 +48,15 @@ def leftNormalization(MPS, chir, chic):
         MPS[n] = np.transpose(MPS[n], (0, 2, 1))
         print "MPS shape", MPS[n].shape
 
-        print "Q[",n,"] =", Q
-        print "R[",n,"] =", R
+        print "U[",n,"] =", U
+        print "SV[",n,"] =", SV
 
         if(n != length-1):
             print "shape =", MPS[n+1].shape
-            MPS[n+1] = np.tensordot(R, MPS[n+1], axes=([1, 0]))
+            MPS[n+1] = np.tensordot(SV, MPS[n+1], axes=([1, 0]))
             chir[n+1], aux, aux = MPS[n+1].shape
             print "shape =", MPS[n+1].shape
-            del Q, R, aux, i, j
+            #del Q, R, aux, i, j
 
 #right-canonical orthonormalization
 def rightNormalization(MPS, chir, chic):
@@ -67,30 +69,33 @@ def rightNormalization(MPS, chir, chic):
         MPS[ip] = MPS[ip].reshape((chir[ip], chic[ip] * d))
         print "MPS shape", MPS[ip].shape
 
-        MPS[ip] = np.conjugate(MPS[ip].T)
-        print "MPS+ shape", MPS[ip].shape
-        Q, R = np.linalg.qr(MPS[ip])
+        #MPS[ip] = np.conjugate(MPS[ip].T)
+        #print "MPS+ shape", MPS[ip].shape
+        #Q, R = np.linalg.qr(MPS[ip])
         U, S, V = np.linalg.svd(MPS[ip], full_matrices=False)
 
         print "SINGULARS =", S, xi
-        mask = (S != S)
-        print "SINGULARS =", mask
         mask = (S > epsS)
-        print "SINGULARS =", mask
         newXi = mask.tolist().count(True)
+        print "SINGULARS =", mask, newXi
         if(newXi < xi): mask[newXi:] = False
         else: mask[xi:] = False
-        print "SINGULARS =", mask, newXi
+        print "SINGULARS =", mask
 
-        Q = np.conjugate(Q.T)
-        R = np.conjugate(R.T)
+        #Q = np.conjugate(Q.T)
+        #R = np.conjugate(R.T)
 
-        MPS[ip] = Q.copy()
+        #MPS[ip] = Q.copy()
+        S = np.diag(np.compress(mask, S, 0))
+        U = np.compress(mask, U, 1)
+        MPS[ip] = np.compress(mask, V, 0)
         chir[ip], aux = MPS[ip].shape
+        US = np.tensordot(U, S, axes=([1,0]))
 
         i = np.random.randint(0, chir[ip])
         j = np.random.randint(0, chir[ip])
-        dot = np.dot(Q[i,:], Q[j,:])
+        #dot = np.dot(Q[i,:], Q[j,:])
+        dot = np.dot(V[i,:], V[j,:])
         print "dot =", i, j, round(dot, 10)
 
         print "MPS shape", MPS[ip].shape
@@ -99,17 +104,17 @@ def rightNormalization(MPS, chir, chic):
     #MPS[n] = np.transpose(MPS[n], (0, 2, 1))
     #print "MPS shape", MPS[n].shape
 
-        print "Q[",n,"] =", Q
-        print "R[",n,"] =", R
+        print "US[",n,"] =", US
+        print "V[",n,"] =", V
 
         if(n != length-1):
             print "shape =", MPS[ip-1].shape
-            MPS[ip-1] = np.tensordot(MPS[ip-1], R, axes=([1, 0]))
+            MPS[ip-1] = np.tensordot(MPS[ip-1], US, axes=([1, 0]))
             print "shape =", MPS[ip-1].shape
             MPS[ip-1] = np.transpose(MPS[ip-1], (0, 2, 1))
             aux, chic[ip-1], aux = MPS[ip-1].shape
             print "shape =", MPS[ip-1].shape, chir[ip-1], chic[ip-1]
-            del Q, R, aux
+            #del Q, R, aux
 
 def buildLocalH():
     """Builds local hamiltonian (dxd matrix).
@@ -287,10 +292,10 @@ def calcFs(MPS, C, L, K, VR):
 
 """Main...
 """
-length = 4
+length = 9
 d = 2
-xi = 3
-epsS = 1e-15
+xi = 5
+epsS = 1e-12
 
 xir = [d*xi*length for n in range(length)]
 xir[0] = 1
@@ -300,7 +305,7 @@ print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
 leftNormalization(theMPS, xir, xic)
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
-exit()
+
 rightNormalization(theMPS, xir, xic)
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
@@ -308,7 +313,7 @@ theH = buildLocalH()
 print "theH =", theH[0].reshape((d*d, d*d))#"h =", theH
 theC = buildHElements(theMPS, theH)
 print "theC =", len(theC)
-
+exit()
 theL = calcLs(theMPS)
 print "theL =", len(theL)
 theR = calcRs(theMPS)
