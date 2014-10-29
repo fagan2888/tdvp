@@ -18,7 +18,19 @@ def leftNormalization(MPS, chir, chic):
         MPS[n] = MPS[n].reshape((chir[n] * d, chic[n]))
         print "MPS shape", MPS[n].shape
 
-        Q, R = np.linalg.qr(MPS[n])
+        #Q, R = np.linalg.qr(MPS[n])
+        U, S, V = np.linalg.svd(MPS[n], full_matrices=False)
+        SV = np.tensordot(np.diag(S), V)
+
+        print "SINGULARS =", S, xi
+        mask = (S != S)
+        print "SINGULARS =", mask
+        mask = (S > epsS)
+        print "SINGULARS =", mask
+        newXi = mask.tolist().count(True)
+        if(newXi < xi): mask[newXi:] = False
+        else: mask[xi:] = False
+        print "SINGULARS =", mask, newXi
 
         MPS[n] = Q.copy()
         aux, chic[n] = MPS[n].shape
@@ -58,6 +70,17 @@ def rightNormalization(MPS, chir, chic):
         MPS[ip] = np.conjugate(MPS[ip].T)
         print "MPS+ shape", MPS[ip].shape
         Q, R = np.linalg.qr(MPS[ip])
+        U, S, V = np.linalg.svd(MPS[ip], full_matrices=False)
+
+        print "SINGULARS =", S, xi
+        mask = (S != S)
+        print "SINGULARS =", mask
+        mask = (S > epsS)
+        print "SINGULARS =", mask
+        newXi = mask.tolist().count(True)
+        if(newXi < xi): mask[newXi:] = False
+        else: mask[xi:] = False
+        print "SINGULARS =", mask, newXi
 
         Q = np.conjugate(Q.T)
         R = np.conjugate(R.T)
@@ -269,15 +292,15 @@ d = 2
 xi = 3
 epsS = 1e-15
 
-pwr = map(int, [-np.abs(n-length/2.)+length/2. for n in range(length)])
-xir = [d**pwr[n] if d**pwr[n] < xi else xi for n in range(length)]
+xir = [d*xi*length for n in range(length)]
+xir[0] = 1
 xic = np.roll(xir, -1).tolist()
 theMPS = [np.random.rand(xir[n], xic[n], d) for n in range(length)]
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
-#leftNormalization(theMPS, xir, xic)
-#print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
-
+leftNormalization(theMPS, xir, xic)
+print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
+exit()
 rightNormalization(theMPS, xir, xic)
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 

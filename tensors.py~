@@ -1,7 +1,6 @@
 #/usr/bin/python
 
 import numpy as np
-import scipy as sp
 from scipy import linalg
 import cmath
 
@@ -206,33 +205,61 @@ def nullSpaceR(MPS):
     """Calculates the auxiliary matrix R to get its null space.
 
     Given a fixed gauge condition the R gets simplified.
+    Notice that if VR.size = 0 there's no update B[x](n) because
+    VR(n) will be an empty array. However, all the operations
+    associated with VR are still "well-defined".
     """
+    VR = []
+
     for n in range(length):
         R = np.transpose(MPS[n], (1, 0, 2))
         R = np.conjugate(R)
-
         chir, chic, aux = R.shape
+
         R = np.transpose(R, (0, 2, 1))
         R = np.reshape(R, (chir * aux, chic))
         U, S, V = np.linalg.svd(R, full_matrices=True)
 
-        #if(matrix_not_squared):
         dimS, = S.shape
-        VRdag = U[:,dimS:]
-        #else:
-        ##if(squared_matrix_is_full_rank):
-        ##set VR = 0
-        ##else:
-        ##define threshold to get VR from SVD
+        extraS = np.zeros((chir * aux) - dimS)
+        Sp = np.append(S, extraS, 0)
+        mask = (Sp < epsS) #try: np.select(...)
+        VRdag = np.compress(mask, U, axis=1)
 
         R = np.conjugate(np.transpose(R))
         Null = np.tensordot(R, VRdag, axes=([1,0]))
+        #VR.append(VRdag.size)
+        VR.append(np.transpose(VRdag))
 
-        print "D =", n, R.T.shape, U.shape, S.shape, V.shape, VRdag.shape
-        print U; print S; print V; print VRdag; print Null
+        print "D =", n, R.T.shape, U.shape, Sp.shape, V.shape, VRdag.shape
+        print U; print Sp; print VRdag; print Null
 
-        #what if R is full-rank (or squared)? No update?
-        #'cause VRdag will for sure be empty!
+    return VR
+
+def calcFs(MPS, C, L, K, VR):
+    """Returns the list of matrices x*(n) = F(n).
+
+    Is it necessary to invert the L/R matrices? A way to void it?
+    """
+    F = []
+
+    for n in range(length):
+        VRdag = np.conjugate(VR[n].T)
+
+        if(n == 0): tmpL = np.ones((1,1))
+        else:       tmpL = L[n-1]
+        #tmpL = np.linalg.inv(tmpL)
+        bla, aux = np.linalg.eigh(tmpL)
+        print bla
+
+        if(n < length-1):
+            pass
+        if(n > 0):
+            pass
+        if(n < length-2):
+            pass
+
+    return F
 
 
 """Main...
@@ -240,15 +267,16 @@ def nullSpaceR(MPS):
 length = 4
 d = 2
 xi = 3
+epsS = 1e-15
 
-xir = [xi for n in range(length)]
-xic = [xi for n in range(length)]
-xir[0] = xic[length-1] = 1
+pwr = map(int, [-np.abs(n-length/2.)+length/2. for n in range(length)])
+xir = [d**pwr[n] if d**pwr[n] < xi else xi for n in range(length)]
+xic = np.roll(xir, -1).tolist()
 theMPS = [np.random.rand(xir[n], xic[n], d) for n in range(length)]
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
-leftNormalization(theMPS, xir, xic)
-print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
+#leftNormalization(theMPS, xir, xic)
+#print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
 rightNormalization(theMPS, xir, xic)
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
@@ -266,7 +294,10 @@ print "theR =", len(theR)
 theK = calcHmeanval(theMPS, theC)
 print "theK =", theK
 
-nullSpaceR(theMPS)
+theVR = nullSpaceR(theMPS)
+print "theVR =", map(np.size, theVR)#, theVR
+
+calcFs(theMPS, theC, theL, theK, theVR)
 
 exit()
 
