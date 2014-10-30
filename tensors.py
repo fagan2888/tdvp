@@ -141,7 +141,9 @@ def buildHElements(MPS, H):
         tmp = np.transpose(tmp, (2, 3, 0, 1))
 
         C.append(tmp)
+        del AA, tmp
 
+    #print C
     return C
 
 def calcLs(MPS):
@@ -161,9 +163,8 @@ def calcLs(MPS):
         A = np.transpose(np.conjugate(MPS[n]), (1, 0, 2))
         tmp = np.tensordot(A, LA, axes=([2,1], [2,0]))
         tmp = 0.5 * (tmp + tmp.T)
-        print "A =", MPS[n].shape, "LA =", LA.shape, "tmp =", tmp.shape
-        #print "A\n", MPS[n]; 
-        print np.trace(tmp), "l\n", tmp
+        print "A =", MPS[n].shape, "LA =", LA.shape, "tmp =", \
+            tmp.shape, np.trace(tmp), "\nl = \n", tmp
 
         L.append(tmp)
         del LA, A, tmp
@@ -191,9 +192,8 @@ def calcRs(MPS):
         A = np.transpose(np.conjugate(MPS[ip]), (1, 0, 2))
         tmp = np.tensordot(AR, A, axes=([1,2], [2,0]))
         tmp = 0.5 * (tmp + tmp.T)
-        print "A =", MPS[ip].shape, "AR =", AR.shape, "tmp =", tmp.shape
-        #print "A\n", MPS[ip]; 
-        print np.trace(tmp), "r\n", tmp
+        print "A =", MPS[ip].shape, "AR =", AR.shape, "tmp =", \
+            tmp.shape, np.trace(tmp), "\nr = \n", tmp
 
         R.append(tmp)
         del AR, A, tmp
