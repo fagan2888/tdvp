@@ -4,7 +4,7 @@ import numpy as np
 from scipy import linalg
 import cmath
 
-#np.set_printoptions(suppress=True, precision=3)
+#np.set_printoptions(suppress=True, precision=13)
 
 def leftNormalization(MPS, chir, chic):
     """Returns a left-normalized MPS.
@@ -233,8 +233,9 @@ def calcHmeanval(MPS, C):
     return K
 
 def nullSpaceR(MPS):
-    """Calculates the auxiliary matrix R to get its null space.
+    """Calculates the auxiliary matrix R and its null space VR.
 
+    The VR matrices are returned as the tensor VR[a, b, s].
     Given a fixed gauge condition the R gets simplified.
     Notice that if VR.size = 0 there's no update B[x](n) because
     VR(n) will be an empty array. However, all the operations
@@ -251,19 +252,28 @@ def nullSpaceR(MPS):
         R = np.reshape(R, (chir * aux, chic))
         U, S, V = np.linalg.svd(R, full_matrices=True)
 
-        dimS, = S.shape
-        extraS = np.zeros((chir * aux) - dimS)
-        Sp = np.append(S, extraS, 0)
-        mask = (Sp < epsS) #try: np.select(...)
+        #dimS, = S.shape
+        #extraS = np.zeros((chir * aux) - dimS)
+        #Sp = np.append(S, extraS, 0)
+        #maskp = (Sp < epsS) #try: np.select(...)
+
+        mask = np.empty(chir * aux, dtype=bool)
+        mask[:] = False; mask[chic:] = True
         VRdag = np.compress(mask, U, axis=1)
 
         R = np.conjugate(np.transpose(R))
         Null = np.tensordot(R, VRdag, axes=([1,0]))
-        #VR.append(VRdag.size)
-        VR.append(np.transpose(VRdag))
+        Id = np.tensordot(VRdag.T, VRdag, axes=([1,0]))
 
-        print "D =", n, R.T.shape, U.shape, Sp.shape, V.shape, VRdag.shape
-        print U; print Sp; print VRdag; print Null
+        tmp = np.conjugate(VRdag.T)
+        lpr, lmz = tmp.shape
+        tmp = np.reshape(tmp, (lpr, chir, aux))
+        VR.append(tmp)
+
+        #print "D =", n, R.T.shape, U.shape, Sp.shape, V.shape, VRdag.shape
+        print "mask =", mask, S, "\nU\n", U, "\nVRdag\n", VRdag, \
+            "\nNull\n", Null, "\nVV+\n", Id
+        del R, U, S, V, VRdag, Null, Id
 
     return VR
 
@@ -325,10 +335,10 @@ print "theL =", len(theL)
 
 theK = calcHmeanval(theMPS, theC)
 print "theK =", theK
-exit()
-theVR = nullSpaceR(theMPS)
-print "theVR =", map(np.size, theVR)#, theVR
 
+theVR = nullSpaceR(theMPS)
+print "theVR =", map(np.shape, theVR)#, theVR
+exit()
 calcFs(theMPS, theC, theL, theK, theVR)
 
 exit()
