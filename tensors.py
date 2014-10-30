@@ -158,7 +158,7 @@ def calcLs(MPS):
         if(n == 0):
             LA = MPS[n]
         else:
-            LA = np.tensordot(L[n-1], MPS[n], axes=([1,0]))
+            LA = np.tensordot(np.diag(L[n-1]), MPS[n], axes=([1,0]))
 
         A = np.transpose(np.conjugate(MPS[n]), (1, 0, 2))
         tmp = np.tensordot(A, LA, axes=([2,1], [2,0]))
@@ -166,7 +166,7 @@ def calcLs(MPS):
         print "A =", MPS[n].shape, "LA =", LA.shape, "tmp =", \
             tmp.shape, np.trace(tmp), "\nl = \n", tmp
 
-        L.append(tmp)
+        L.append(tmp.diagonal())
         del LA, A, tmp
 
     return L
@@ -187,7 +187,7 @@ def calcRs(MPS):
             AR = MPS[ip]
             AR = np.transpose(AR, (0, 2, 1))
         else:
-            AR = np.tensordot(MPS[ip], R[n-1], axes=([1,0]))
+            AR = np.tensordot(MPS[ip], np.diag(R[n-1]), axes=([1,0]))
 
         A = np.transpose(np.conjugate(MPS[ip]), (1, 0, 2))
         tmp = np.tensordot(AR, A, axes=([1,2], [2,0]))
@@ -195,7 +195,7 @@ def calcRs(MPS):
         print "A =", MPS[ip].shape, "AR =", AR.shape, "tmp =", \
             tmp.shape, np.trace(tmp), "\nr = \n", tmp
 
-        R.append(tmp)
+        R.append(tmp.diagonal())
         del AR, A, tmp
 
     R.reverse()
