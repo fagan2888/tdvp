@@ -208,6 +208,7 @@ def calcHmeanval(MPS, C):
     """
     dim, aux, aux = MPS[length-1].shape
     K = [np.zeros((dim,dim))]
+    print "shape =-1", length-1, K[0].shape
 
     for n in range(length-1):
         ip = length-n-1-1
@@ -226,6 +227,7 @@ def calcHmeanval(MPS, C):
         print "shape =", n, ip, tmp.shape
 
         K.append(tmp)
+        del AA, tmp, A
 
     K.reverse()
     return K
@@ -320,10 +322,10 @@ theR = calcRs(theMPS)
 print "theR =", len(theR)
 theL = calcLs(theMPS)
 print "theL =", len(theL)
-exit()
+
 theK = calcHmeanval(theMPS, theC)
 print "theK =", theK
-
+exit()
 theVR = nullSpaceR(theMPS)
 print "theVR =", map(np.size, theVR)#, theVR
 
