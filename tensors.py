@@ -280,25 +280,49 @@ def nullSpaceR(MPS):
 def calcFs(MPS, C, L, K, VR):
     """Returns the list of matrices x*(n) = F(n).
 
-    Is it necessary to invert the L/R matrices? A way to void it?
+    The inversion and sqrt of the L/R is trivial since one of them is
+    the identity and the other one is a diagonal matrix containing the
+    eigenvalues of the reduced density matrix.
     """
     F = []
 
     for n in range(length):
-        VRdag = np.conjugate(VR[n].T)
+        tmp1 = tmp2 = tmp3 = 0.
+        VRdag = np.transpose(np.conjugate(VR[n]), (1, 0, 2))
 
-        if(n == 0): tmpL = np.ones((1,1))
-        else:       tmpL = L[n-1]
-        #tmpL = np.linalg.inv(tmpL)
-        bla, aux = np.linalg.eigh(tmpL)
-        print bla
+        if(n == 0): Lsqrt = np.ones((1,1))
+        else:       Lsqrt = np.diag(map(np.sqrt, L[n-1]))
+        print "Lsqrt =", Lsqrt.shape
 
         if(n < length-1):
-            pass
+            A = np.transpose(np.conjugate(MPS[n+1]), (1, 0, 2))
+            AVRdag = np.tensordot(A, VRdag, axes=([1,0]))
+            CAVRdag = np.tensordot(C[n], AVRdag, axes=([1,2,3], [0,3,1]))
+            tmp1 = np.tensordot(Lsqrt, CAVRdag, axes=([1,0]))
+            #print tmp1
+
         if(n > 0):
-            pass
+            if(n == 1): Ltmp = np.ones((1,1))
+            else:       Ltmp = np.diag(L[n-2])
+            Lsqrti = 1./L[n-1]; Lsqrti = np.diag(map(np.sqrt, Lsqrti))
+
+            CVRdag = np.tensordot(C[n-1], VRdag, axes=([1,3], [0,2]))
+            LCVRdag = np.tensordot(Ltmp, CVRdag, axes=([1,0]))
+            A = np.transpose(np.conjugate(MPS[n-1]), (1, 0, 2))
+            ALCVRdag = np.tensordot(A, LCVRdag, axes=([1,2], [0,1]))
+            tmp2 = np.tensordot(Lsqrti, ALCVRdag, axes=([1,0]))
+            #print tmp2
+
         if(n < length-2):
-            pass
+            KVRdag = np.tensordot(K[n+1], VRdag, axes=([1,0]))
+            AKVRdag = np.tensordot(MPS[n], KVRdag, axes=([1,2], [0,2]))
+            tmp3 = np.tensordot(Lsqrt, AKVRdag, axes=([1,0]))
+            #print tmp3
+
+        tmp = tmp1 + tmp2 + tmp3
+        F.append(tmp)
+        print tmp
+        del tmp1, tmp2, tmp3, tmp
 
     return F
 
@@ -338,8 +362,9 @@ print "theK =", theK
 
 theVR = nullSpaceR(theMPS)
 print "theVR =", map(np.shape, theVR)#, theVR
-exit()
-calcFs(theMPS, theC, theL, theK, theVR)
+
+theF = calcFs(theMPS, theC, theL, theK, theVR)
+print "theF =", map(np.shape, theF)
 
 exit()
 
