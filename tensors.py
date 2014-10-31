@@ -304,7 +304,7 @@ def calcFs(MPS, C, L, K, VR):
         if(n > 0):
             if(n == 1): Ltmp = np.ones((1,1))
             else:       Ltmp = np.diag(L[n-2])
-            Lsqrti = 1./L[n-1]; Lsqrti = np.diag(map(np.sqrt, Lsqrti))
+            Lsqrti = np.diag(map(np.sqrt, 1./L[n-1]))
 
             CVRdag = np.tensordot(C[n-1], VRdag, axes=([1,3], [0,2]))
             LCVRdag = np.tensordot(Ltmp, CVRdag, axes=([1,0]))
@@ -325,6 +325,34 @@ def calcFs(MPS, C, L, K, VR):
         del tmp1, tmp2, tmp3, tmp
 
     return F
+
+def getUpdateB(L, x, VR):
+    """Returns the list of updates B to be added to the current MPS.
+
+    Be careful with the dot product when there is no update to be 
+    performed. Set those tensors to zero with proper shape.
+    """
+    B = []
+
+    for n in range(length):
+        if(n == 0): Lsqrti = np.ones((1,1))
+        else:       Lsqrti = np.diag(map(np.sqrt, 1./L[n-1]))
+
+        row, col, aux = VR[n].shape
+        if(row*col == 0):
+            row, row = Lsqrti.shape
+            tmp = np.zeros((row, col, aux))
+        else:
+            xVR = np.tensordot(x[n], VR[n], axes=([1,0]))
+            tmp = np.tensordot(Lsqrti, xVR, axes=([1,0]))
+
+        print n, Lsqrti.shape, x[n].shape, VR[n].shape, tmp.shape
+        B.append(tmp)
+
+    return B
+
+def doUpdateForA(B):
+    pass
 
 
 """Main...
@@ -365,6 +393,9 @@ print "theVR =", map(np.shape, theVR)#, theVR
 
 theF = calcFs(theMPS, theC, theL, theK, theVR)
 print "theF =", map(np.shape, theF)
+
+theB = getUpdateB(theL, theF, theVR)
+print "theB =", theB
 
 exit()
 
