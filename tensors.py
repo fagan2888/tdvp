@@ -351,8 +351,19 @@ def getUpdateB(L, x, VR):
 
     return B
 
-def doUpdateForA(B):
-    pass
+def doUpdateForA(MPS, B):
+    """
+    It does the actual update to the MPS state for given time step.
+
+    The update is done according to the formula:
+    A[n, t + dTau] = A[n, t] - dTau * B[x*](n),
+    where dTau is the corresponding time step.
+    """
+    for n in range(length):
+        MPS[n] -= dTau * B[n]
+        print "cmp shapes =", n, MPS[n].shape, B[n].shape
+
+    return MPS
 
 
 """Main...
@@ -361,6 +372,7 @@ length = 8
 d = 2
 xi = 5
 epsS = 1e-12
+dTau = 0.1
 
 xir = [d**(length/2) for n in range(length)]
 xir[0] = 1
@@ -395,7 +407,9 @@ theF = calcFs(theMPS, theC, theL, theK, theVR)
 print "theF =", map(np.shape, theF)
 
 theB = getUpdateB(theL, theF, theVR)
-print "theB =", theB
+print "theB =", map(np.shape, theB)
+
+doUpdateForA(theMPS, theB)
 
 exit()
 
