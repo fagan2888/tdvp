@@ -411,6 +411,14 @@ print "theB =", map(np.shape, theB)
 
 doUpdateForA(theMPS, theB)
 
+theR = calcRs(theMPS)
+print "theR =", len(theR)
+theL = calcLs(theMPS)
+print "theL =", len(theL)
+
+rightNormalization(theMPS, xir, xic)
+print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
+
 exit()
 
 """
