@@ -373,6 +373,7 @@ d = 2
 xi = 5
 epsS = 1e-12
 dTau = 0.1
+maxIter = 10
 
 xir = [d**(length/2) for n in range(length)]
 xir[0] = 1
@@ -389,35 +390,44 @@ print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
 theH = buildLocalH()
 print "theH =", theH[0].reshape((d*d, d*d))#"h =", theH
-theC = buildHElements(theMPS, theH)
-print "theC =", len(theC)
 
 theR = calcRs(theMPS)
 print "theR =", len(theR)
 theL = calcLs(theMPS)
 print "theL =", len(theL)
 
-theK = calcHmeanval(theMPS, theC)
-print "theK =", theK
+I = 0
+while (I != maxIter):
 
-theVR = nullSpaceR(theMPS)
-print "theVR =", map(np.shape, theVR)#, theVR
+    theC = buildHElements(theMPS, theH)
+    print "theC =", len(theC)
 
-theF = calcFs(theMPS, theC, theL, theK, theVR)
-print "theF =", map(np.shape, theF)
+    theK = calcHmeanval(theMPS, theC)
+    print "theK =", theK
 
-theB = getUpdateB(theL, theF, theVR)
-print "theB =", map(np.shape, theB)
+    theVR = nullSpaceR(theMPS)
+    print "theVR =", map(np.shape, theVR)#, theVR
 
-doUpdateForA(theMPS, theB)
+    theF = calcFs(theMPS, theC, theL, theK, theVR)
+    print "theF =", map(np.shape, theF)
 
-theR = calcRs(theMPS)
-print "theR =", len(theR)
-theL = calcLs(theMPS)
-print "theL =", len(theL)
+    theB = getUpdateB(theL, theF, theVR)
+    print "theB =", map(np.shape, theB)
 
-rightNormalization(theMPS, xir, xic)
-print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
+    doUpdateForA(theMPS, theB)
+
+    leftNormalization(theMPS, xir, xic)
+    print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
+
+    rightNormalization(theMPS, xir, xic)
+    print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
+
+    theR = calcRs(theMPS)
+    print "theR =", len(theR)
+    theL = calcLs(theMPS)
+    print "theL =", len(theL)
+
+    I += 1
 
 exit()
 
