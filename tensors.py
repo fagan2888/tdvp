@@ -1,7 +1,7 @@
 #/usr/bin/python
 
 import numpy as np
-from scipy import linalg
+#from scipy import linalg
 import cmath
 
 #np.set_printoptions(suppress=True, precision=13)
@@ -382,22 +382,22 @@ theMPS = [np.random.rand(xir[n], xic[n], d)-0.5 for n in range(length)]
 #[np.random.randint(1, 1e9, (xir[n], xic[n], d)) for n in range(length)]
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
-leftNormalization(theMPS, xir, xic)
-print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
-
-rightNormalization(theMPS, xir, xic)
-print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
-
 theH = buildLocalH()
 print "theH =", theH[0].reshape((d*d, d*d))#"h =", theH
 
-theR = calcRs(theMPS)
-print "theR =", len(theR)
-theL = calcLs(theMPS)
-print "theL =", len(theL)
-
 I = 0
 while (I != maxIter):
+
+    leftNormalization(theMPS, xir, xic)
+    print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
+
+    rightNormalization(theMPS, xir, xic)
+    print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
+
+    theR = calcRs(theMPS)
+    print "theR =", len(theR)
+    theL = calcLs(theMPS)
+    print "theL =", len(theL)
 
     theC = buildHElements(theMPS, theH)
     print "theC =", len(theC)
@@ -415,17 +415,6 @@ while (I != maxIter):
     print "theB =", map(np.shape, theB)
 
     doUpdateForA(theMPS, theB)
-
-    leftNormalization(theMPS, xir, xic)
-    print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
-
-    rightNormalization(theMPS, xir, xic)
-    print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
-
-    theR = calcRs(theMPS)
-    print "theR =", len(theR)
-    theL = calcLs(theMPS)
-    print "theL =", len(theL)
 
     I += 1
 

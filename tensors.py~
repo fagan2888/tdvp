@@ -233,8 +233,9 @@ def calcHmeanval(MPS, C):
     return K
 
 def nullSpaceR(MPS):
-    """Calculates the auxiliary matrix R to get its null space.
+    """Calculates the auxiliary matrix R and its null space VR.
 
+    The VR matrices are returned as the tensor VR[a, b, s].
     Given a fixed gauge condition the R gets simplified.
     Notice that if VR.size = 0 there's no update B[x](n) because
     VR(n) will be an empty array. However, all the operations
@@ -263,7 +264,11 @@ def nullSpaceR(MPS):
         R = np.conjugate(np.transpose(R))
         Null = np.tensordot(R, VRdag, axes=([1,0]))
         Id = np.tensordot(VRdag.T, VRdag, axes=([1,0]))
-        VR.append(np.conjugate(VRdag.T))
+
+        tmp = np.conjugate(VRdag.T)
+        lpr, lmz = tmp.shape
+        tmp = np.reshape(tmp, (lpr, chir, aux))
+        VR.append(tmp)
 
         #print "D =", n, R.T.shape, U.shape, Sp.shape, V.shape, VRdag.shape
         print "mask =", mask, S, "\nU\n", U, "\nVRdag\n", VRdag, \
@@ -275,27 +280,90 @@ def nullSpaceR(MPS):
 def calcFs(MPS, C, L, K, VR):
     """Returns the list of matrices x*(n) = F(n).
 
-    Is it necessary to invert the L/R matrices? A way to void it?
+    The inversion and sqrt of the L/R is trivial since one of them is
+    the identity and the other one is a diagonal matrix containing the
+    eigenvalues of the reduced density matrix.
     """
     F = []
 
     for n in range(length):
-        VRdag = np.conjugate(VR[n].T)
+        tmp1 = tmp2 = tmp3 = 0.
+        VRdag = np.transpose(np.conjugate(VR[n]), (1, 0, 2))
 
-        if(n == 0): tmpL = np.ones((1,1))
-        else:       tmpL = L[n-1]
-        #tmpL = np.linalg.inv(tmpL)
-        bla, aux = np.linalg.eigh(tmpL)
-        print bla
+        if(n == 0): Lsqrt = np.ones((1,1))
+        else:       Lsqrt = np.diag(map(np.sqrt, L[n-1]))
+        print "Lsqrt =", Lsqrt.shape
 
         if(n < length-1):
-            pass
+            A = np.transpose(np.conjugate(MPS[n+1]), (1, 0, 2))
+            AVRdag = np.tensordot(A, VRdag, axes=([1,0]))
+            CAVRdag = np.tensordot(C[n], AVRdag, axes=([1,2,3], [0,3,1]))
+            tmp1 = np.tensordot(Lsqrt, CAVRdag, axes=([1,0]))
+            #print tmp1
+
         if(n > 0):
-            pass
+            if(n == 1): Ltmp = np.ones((1,1))
+            else:       Ltmp = np.diag(L[n-2])
+            Lsqrti = np.diag(map(np.sqrt, 1./L[n-1]))
+
+            CVRdag = np.tensordot(C[n-1], VRdag, axes=([1,3], [0,2]))
+            LCVRdag = np.tensordot(Ltmp, CVRdag, axes=([1,0]))
+            A = np.transpose(np.conjugate(MPS[n-1]), (1, 0, 2))
+            ALCVRdag = np.tensordot(A, LCVRdag, axes=([1,2], [0,1]))
+            tmp2 = np.tensordot(Lsqrti, ALCVRdag, axes=([1,0]))
+            #print tmp2
+
         if(n < length-2):
-            pass
+            KVRdag = np.tensordot(K[n+1], VRdag, axes=([1,0]))
+            AKVRdag = np.tensordot(MPS[n], KVRdag, axes=([1,2], [0,2]))
+            tmp3 = np.tensordot(Lsqrt, AKVRdag, axes=([1,0]))
+            #print tmp3
+
+        tmp = tmp1 + tmp2 + tmp3
+        F.append(tmp)
+        print tmp
+        del tmp1, tmp2, tmp3, tmp
 
     return F
+
+def getUpdateB(L, x, VR):
+    """Returns the list of updates B to be added to the current MPS.
+
+    Be careful with the dot product when there is no update to be 
+    performed. Set those tensors to zero with proper shape.
+    """
+    B = []
+
+    for n in range(length):
+        if(n == 0): Lsqrti = np.ones((1,1))
+        else:       Lsqrti = np.diag(map(np.sqrt, 1./L[n-1]))
+
+        row, col, aux = VR[n].shape
+        if(row*col == 0):
+            row, row = Lsqrti.shape
+            tmp = np.zeros((row, col, aux))
+        else:
+            xVR = np.tensordot(x[n], VR[n], axes=([1,0]))
+            tmp = np.tensordot(Lsqrti, xVR, axes=([1,0]))
+
+        print n, Lsqrti.shape, x[n].shape, VR[n].shape, tmp.shape
+        B.append(tmp)
+
+    return B
+
+def doUpdateForA(MPS, B):
+    """
+    It does the actual update to the MPS state for given time step.
+
+    The update is done according to the formula:
+    A[n, t + dTau] = A[n, t] - dTau * B[x*](n),
+    where dTau is the corresponding time step.
+    """
+    for n in range(length):
+        MPS[n] -= dTau * B[n]
+        print "cmp shapes =", n, MPS[n].shape, B[n].shape
+
+    return MPS
 
 
 """Main...
@@ -304,6 +372,8 @@ length = 8
 d = 2
 xi = 5
 epsS = 1e-12
+dTau = 0.1
+maxIter = 10
 
 xir = [d**(length/2) for n in range(length)]
 xir[0] = 1
@@ -312,29 +382,41 @@ theMPS = [np.random.rand(xir[n], xic[n], d)-0.5 for n in range(length)]
 #[np.random.randint(1, 1e9, (xir[n], xic[n], d)) for n in range(length)]
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
-leftNormalization(theMPS, xir, xic)
-print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
-
-rightNormalization(theMPS, xir, xic)
-print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
-
 theH = buildLocalH()
 print "theH =", theH[0].reshape((d*d, d*d))#"h =", theH
-theC = buildHElements(theMPS, theH)
-print "theC =", len(theC)
 
-theR = calcRs(theMPS)
-print "theR =", len(theR)
-theL = calcLs(theMPS)
-print "theL =", len(theL)
+I = 0
+while (I != maxIter):
 
-theK = calcHmeanval(theMPS, theC)
-print "theK =", theK
+    leftNormalization(theMPS, xir, xic)
+    print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
-theVR = nullSpaceR(theMPS)
-print "theVR =", map(np.size, theVR)#, theVR
-exit()
-calcFs(theMPS, theC, theL, theK, theVR)
+    rightNormalization(theMPS, xir, xic)
+    print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
+
+    theR = calcRs(theMPS)
+    print "theR =", len(theR)
+    theL = calcLs(theMPS)
+    print "theL =", len(theL)
+
+    theC = buildHElements(theMPS, theH)
+    print "theC =", len(theC)
+
+    theK = calcHmeanval(theMPS, theC)
+    print "theK =", theK
+
+    theVR = nullSpaceR(theMPS)
+    print "theVR =", map(np.shape, theVR)#, theVR
+
+    theF = calcFs(theMPS, theC, theL, theK, theVR)
+    print "theF =", map(np.shape, theF)
+
+    theB = getUpdateB(theL, theF, theVR)
+    print "theB =", map(np.shape, theB)
+
+    doUpdateForA(theMPS, theB)
+
+    I += 1
 
 exit()
 
