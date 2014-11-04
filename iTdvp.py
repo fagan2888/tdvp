@@ -6,18 +6,7 @@ import scipy.linalg as spla
 import functools
 import cmath
 
-np.set_printoptions(suppress=True)#, precision=3)
-
-def realFunc(x, y, z):
-    print "x =", x
-    print "y =", y
-    print "z =", z
-
-def callIt(A, B, C):
-    funcWrapped = functools.partial(realFunc, A, B)
-    funcWrapped(C)
-
-################################################################
+np.set_printoptions(suppress=True, precision=3)
 
 def powerMethod(MPS, dir):
     eval = 1234.5678
@@ -37,6 +26,7 @@ def powerMethod(MPS, dir):
         if(np.abs(eval - norm) < expS): return norm, X
         else: eval = norm
 
+    print "\nWARNING: powerMethod did not converge\n"
     return -1, np.zeros(chir, chic)
 
 def linearOpForR(MPS, R):
@@ -299,35 +289,39 @@ def doUpdateForA(MPS, B):
 
 """Main...
 """
-length = 4
 d = 2
-xi = 3
+xi = 30
 expS = 1e-12
 maxIter = 200
 dTau = 0.1
 
 xir = xic = xi
-theA = np.random.rand(xir, xic, d) - .5
+theA = np.random.rand(xir, xic, d) - .5 + 1j * np.zeros((xir, xic, d))
 
 theH = buildLocalH()
 print "theH\n", theH.reshape(d*d, d*d)
 
-theR = symmNormalization(theA, xir, xic)
-print "theR =", theR
+I = 0
+while (I != maxIter):
 
-theC = buildHElements(theA, theH)
-print "theC =", theC.shape
+    theR = symmNormalization(theA, xir, xic)
+    print "theR =", theR
 
-theK = calcHmeanval(theA, theR, theH)
-print "theK =", theK.shape
+    theC = buildHElements(theA, theH)
+    print "theC =", theC.shape
 
-theVR = nullSpaceR(theA, theR)
-print "theVR =", theVR.shape
+    theK = calcHmeanval(theA, theR, theH)
+    print "theK =", theK.shape
 
-theF = calcFs(theA, theC, theR, theK, theVR)
-print "theF =", theF.shape
+    theVR = nullSpaceR(theA, theR)
+    print "theVR =", theVR.shape
 
-theB = getUpdateB(theR, theF, theVR)
-print "theB =", theB.shape
+    theF = calcFs(theA, theC, theR, theK, theVR)
+    print "theF =", theF.shape
 
-doUpdateForA(theA, theB)
+    theB = getUpdateB(theR, theF, theVR)
+    print "theB =", theB.shape
+
+    doUpdateForA(theA, theB)
+
+    I += 1
