@@ -1,53 +1,130 @@
 #!/usr/bin/python
 
 import numpy as np
-import scipy.linalg as spla
 import scipy.sparse.linalg as spspla
+import scipy.linalg as spla
+import functools
 import cmath
 
 np.set_printoptions(suppress=True, precision=3)
 
-def powerMethod(MPS):
-    chir, chic, aux = MPS.shape
-    X = np.random.rand(chir, chic) - .5
-    maxIterForPow = 1000
-    print X
+def realFunc(x, y, z):
+    print "x =", x
+    print "y =", y
+    print "z =", z
 
-    for q in range(maxIterForPow):
-        Y = linearOpForR(MPS, X)
+def callIt(A, B, C):
+    funcWrapped = functools.partial(realFunc, A, B)
+    funcWrapped(C)
+
+################################################################
+
+def powerMethod(MPS, dir):
+    eval = 1234.5678
+    chir, chic, aux = MPS.shape
+    X = np.random.rand(chir * chic) - .5
+
+    for q in range(maxIter):
+        if(dir == 'R'): Y = linearOpForR(MPS, X)
+        else: Y = linearOpForL(MPS, X)
+
+        Y = np.reshape(Y, (chir, chic))
         YH = np.transpose(np.conjugate(Y), (1, 0))
         YHY = np.tensordot(YH, Y, axes=([1, 0]))
         norm = np.sqrt(np.trace(YHY))
         X = Y / norm
-        print q, norm
 
-def linearOpForR(MPS, X):
-    AX = np.tensordot(MPS, X, axes=([1,0]))
+        if(np.abs(eval - norm) < expS): return norm, X
+        else: eval = norm
+
+    return -1, np.zeros(chir, chic)
+
+def linearOpForR(MPS, R):
+    chir, chic, aux = MPS.shape
+    R = np.reshape(R, (chir, chic))
+    AR = np.tensordot(MPS, R, axes=([1,0]))
     AH = np.transpose(np.conjugate(MPS), (1, 0, 2))
-    AXAH = np.tensordot(AX, AH, axes=([1,2], [2,0]))
-    #AA = np.tensordot(A, MPS, axes=([2, 2]))
-    #AXA = np.tensordot(AA, X, axes=([1, 3], [0, 1]))
+    ARAH = np.tensordot(AR, AH, axes=([1,2], [2,0]))
 
-    return AXAH
+    return ARAH.reshape(chir * chic)
+
+def linearOpForL(MPS, L):
+    chir, chic, aux = MPS.shape
+    L = np.reshape(L, (chir, chic))
+    LA = np.tensordot(L, MPS, axes=([1,0]))
+    AH = np.transpose(np.conjugate(MPS), (1, 0, 2))
+    AHLA = np.tensordot(AH, LA, axes=([1,2], [0,2]))
+
+    return AHLA.reshape(chir * chic)
 
 def symmNormalization(MPS, chir, chic):
     """Returns a symmetric normalized MPS.
 
-    There is the doubt of how to reshape the tensor in order to get
-    the SVD. (Look at the first two lines of the sub.) My guess is 
-    that in an infinite system it does not make a difference.
+    This is really tricky business!
     """
     AH = np.transpose(np.conjugate(MPS), (1, 0, 2))
-    AA = np.tensordot(AH, MPS, axes=([2,2]))
-    AA = np.reshape(AA, (chir*chic, chir*chic))
+    AA = np.tensordot(MPS, AH, axes=([2,2]))
+    AA = np.transpose(AA, (0, 1, 3, 2))
+    AA = np.transpose(AA, (0, 2, 1, 3))
+    AA = np.reshape(AA, (chir * chic, chir * chic))
     print "AA =\n", AA#, AA == AA.T
-    omega, R = spspla.eigs(AA, k=1, which='LR')
+
+    omega, R = spspla.eigs(AA, k=1, which='LR', tol=expS, 
+                           maxiter=maxIter)
     print "w(1) =", omega
-    Aval, Avec = spla.eig(AA)
-    print Aval
-    powerMethod(MPS)
-    #print getRasVec(np.eye(chir, chic))
-    #linearOp = spspla.LinearOperator((chir, chic), matvec=getRasVec)
+    #Aval, Avec = spla.eig(AA)
+    #print Aval
+
+    linOpWrapped = functools.partial(linearOpForR, MPS)
+    linOpForEigs = spspla.LinearOperator((chir * chic, chir * chic), 
+                                         matvec = linOpWrapped)
+    omega, R = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
+                           maxiter=maxIter)
+    R = R.reshape(chir, chic)
+    print "w(1) =", omega, "\nR\n", R
+    #omega, R = powerMethod(MPS, dir='R')
+    #print "w(1) =", omega, "\nR\n", R
+
+
+    R = spla.sqrtm(R)
+    A = np.tensordot(MPS, R, axes=([1,0]))
+    R = spla.inv(R)
+    A = np.tensordot(R, A, axes=([1,0]))
+    MPS = np.transpose(A, (0, 2, 1))
+
+
+    linOpWrapped = functools.partial(linearOpForL, MPS)
+    linOpForEigs = spspla.LinearOperator((chir * chic, chir * chic), 
+                                         matvec = linOpWrapped)
+    omega, L = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
+                           maxiter=maxIter)
+    L = L.reshape(chir, chic)
+    print "w(1) =", omega, "\nL\n", L
+    #omega, L = powerMethod(MPS, dir='L')
+    #print "w(1) =", omega, "\nL\n", L
+
+
+    eval, evec = spla.eig(L)
+    print eval, "\n", evec
+    A = np.tensordot(MPS, evec, axes=([1,0]))
+    evec = np.conjugate(evec.T)
+    MPS = np.tensordot(evec, A, axes=([1,0]))
+    MPS = np.transpose(MPS, (0, 2, 1))
+
+
+    eval = map(np.sqrt, eval)
+    A = np.tensordot(np.diag(eval), MPS, axes=([1,0]))
+    eval = 1/np.asarray(eval)
+    print A.shape, np.diag(eval).shape
+    MPS = np.tensordot(A, np.diag(eval), axes=([1,0]))
+    MPS = np.transpose(MPS, (0, 2, 1))
+
+    MPS /= np.sqrt(omega)
+    omega, L = powerMethod(MPS, dir='L')
+    print "chk =", omega, "\nL\n", L
+
+    omega, R = powerMethod(MPS, dir='R')
+    print "chk =", omega, "\nR\n", R
 
 def buildLocalH():
     """Builds local hamiltonian (d x d)-matrix.
@@ -84,6 +161,8 @@ def calcHmeanval(MPS, Ssqrt, C):
 length = 4
 d = 2
 xi = 3
+expS = 1e-12
+maxIter = 200
 
 xir = xic = xi
 theA = np.random.rand(xir, xic, d) - .5
@@ -92,6 +171,7 @@ theA = np.random.rand(xir, xic, d) - .5
 #print "theH\n", theH.reshape(d*d, d*d)
 
 symmNormalization(theA, xir, xic)
+#callIt(3,99,'A')
 exit()
 print "theGamma =", map(np.shape, theGamma)
 
