@@ -6,7 +6,7 @@ import scipy.linalg as spla
 import functools
 import cmath
 
-np.set_printoptions(suppress=True, precision=3)
+np.set_printoptions(suppress=True)#, precision=3)
 
 def realFunc(x, y, z):
     print "x =", x
@@ -67,13 +67,13 @@ def symmNormalization(MPS, chir, chic):
     AA = np.transpose(AA, (0, 1, 3, 2))
     AA = np.transpose(AA, (0, 2, 1, 3))
     AA = np.reshape(AA, (chir * chic, chir * chic))
-    print "AA =\n", AA#, AA == AA.T
+    ##print "AA =\n", AA
 
     omega, R = spspla.eigs(AA, k=1, which='LR', tol=expS, 
                            maxiter=maxIter)
     print "w(1) =", omega
-    #Aval, Avec = spla.eig(AA)
-    #print Aval
+    ##Aval, Avec = spla.eig(AA)
+    ##print Aval
 
     linOpWrapped = functools.partial(linearOpForR, MPS)
     linOpForEigs = spspla.LinearOperator((chir * chic, chir * chic), 
@@ -82,8 +82,8 @@ def symmNormalization(MPS, chir, chic):
                            maxiter=maxIter)
     R = R.reshape(chir, chic)
     print "w(1) =", omega, "\nR\n", R
-    #omega, R = powerMethod(MPS, dir='R')
-    #print "w(1) =", omega, "\nR\n", R
+    ##omega, R = powerMethod(MPS, dir='R')
+    ##print "w(1) =", omega, "\nR\n", R
 
 
     R = spla.sqrtm(R)
@@ -100,8 +100,8 @@ def symmNormalization(MPS, chir, chic):
                            maxiter=maxIter)
     L = L.reshape(chir, chic)
     print "w(1) =", omega, "\nL\n", L
-    #omega, L = powerMethod(MPS, dir='L')
-    #print "w(1) =", omega, "\nL\n", L
+    ##omega, L = powerMethod(MPS, dir='L')
+    ##print "w(1) =", omega, "\nL\n", L
 
 
     eval, evec = spla.eig(L)
@@ -112,19 +112,22 @@ def symmNormalization(MPS, chir, chic):
     MPS = np.transpose(MPS, (0, 2, 1))
 
 
-    eval = map(np.sqrt, eval)
+    eval = map(np.sqrt, map(np.sqrt, eval))
     A = np.tensordot(np.diag(eval), MPS, axes=([1,0]))
     eval = 1/np.asarray(eval)
-    print A.shape, np.diag(eval).shape
     MPS = np.tensordot(A, np.diag(eval), axes=([1,0]))
     MPS = np.transpose(MPS, (0, 2, 1))
 
     MPS /= np.sqrt(omega)
+    print "New MPS =", MPS.shape
+
     omega, L = powerMethod(MPS, dir='L')
     print "chk =", omega, "\nL\n", L
 
     omega, R = powerMethod(MPS, dir='R')
     print "chk =", omega, "\nR\n", R
+
+    return np.diag(map(np.abs, L))
 
 def buildLocalH():
     """Builds local hamiltonian (d x d)-matrix.
@@ -150,11 +153,6 @@ def buildHElements(MPS, H):
 
     return C
 
-def calcHmeanval(MPS, Ssqrt, C):
-    S = np.linalg.svd(MPS.reshape(xir, xic*d), False, False)
-    print S
-    pass
-
 
 """Main...
 """
@@ -167,15 +165,13 @@ maxIter = 200
 xir = xic = xi
 theA = np.random.rand(xir, xic, d) - .5
 
-#theH = buildLocalH()
-#print "theH\n", theH.reshape(d*d, d*d)
+theH = buildLocalH()
+print "theH\n", theH.reshape(d*d, d*d)
 
-symmNormalization(theA, xir, xic)
-#callIt(3,99,'A')
-exit()
-print "theGamma =", map(np.shape, theGamma)
+theR = symmNormalization(theA, xir, xic)
+print "theR =", theR
 
 theC = buildHElements(theA, theH)
 print "theC =", theC.shape
 
-calcHmeanval(theA, theC)
+calcHmeanval(theA, theR, theH)
