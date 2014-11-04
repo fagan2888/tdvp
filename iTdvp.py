@@ -232,6 +232,37 @@ def nullSpaceR(MPS, R):
 
     return tmp
 
+def calcFs(MPS, C, R, K, VR):
+    tmp1 = tmp2 = tmp3 = 0.
+    VRdag = np.transpose(np.conjugate(VR), (1, 0, 2))
+    Lsqrt = Rsqrt = np.diag(map(np.sqrt, R))
+    Lsqrti = Rsqrti = np.diag(map(np.sqrt, 1./R))
+
+    A = np.transpose(np.conjugate(MPS), (1, 0, 2))
+    RsiVRdag = np.tensordot(Rsqrti, VRdag, axes=([1,0]))
+    ARsiVRdag = np.tensordot(A, RsiVRdag, axes=([1,0]))
+    RARsiVRdag = np.tensordot(np.diag(R), ARsiVRdag, axes=([1,0]))
+    CRARsiVRdag = np.tensordot(C, RARsiVRdag, axes=([1,2,3], [0,3,1]))
+    tmp1 = np.tensordot(Lsqrt, CRARsiVRdag, axes=([1,0]))
+    #print tmp1
+
+    RsVRdag = np.tensordot(Rsqrt, VRdag, axes=([1,0]))
+    CRsVRdag = np.tensordot(C, RsVRdag, axes=([1,3], [0,2]))
+    LCRsVRdag = np.tensordot(np.diag(R), CRsVRdag, axes=([1,0]))
+    A = np.transpose(np.conjugate(MPS), (1, 0, 2))
+    ALCRsVRdag = np.tensordot(A, LCRsVRdag, axes=([1,2], [0,1]))
+    tmp2 = np.tensordot(Lsqrti, ALCRsVRdag, axes=([1,0]))
+    #print tmp2
+
+    RsiVRdag = np.tensordot(Rsqrti, VRdag, axes=([1,0]))
+    KRsiVRdag = np.tensordot(K, RsiVRdag, axes=([1,0]))
+    AKRsiVRdag = np.tensordot(MPS, KRsiVRdag, axes=([1,2], [0,2]))
+    tmp3 = np.tensordot(Lsqrt, AKRsiVRdag, axes=([1,0]))
+    #print tmp3
+
+    tmp = tmp1 + tmp2 + tmp3
+
+    return tmp
 
 
 """Main...
@@ -257,4 +288,8 @@ print "theC =", theC.shape
 theK = calcHmeanval(theA, theR, theH)
 print "theK =", theK.shape
 
-nullSpaceR(theA, theR)
+theVR = nullSpaceR(theA, theR)
+print "theVR =", theVR.shape
+
+theF = calcFs(theA, theC, theR, theK, theVR)
+print "theF =", theF.shape
