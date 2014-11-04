@@ -153,6 +153,52 @@ def buildHElements(MPS, H):
 
     return C
 
+def getQHaaaa(MPS, R, H, getE = False):
+    chi, = R.shape
+    AA = np.tensordot(MPS, MPS, axes=([1,0]))
+    AAH = np.transpose(np.conjugate(AA), (2, 1, 0, 3))
+    AAR = np.tensordot(AA, np.diag(R), axes=([2,0]))
+    AARAAH = np.tensordot(AAR, AAH, axes=([3,0]))
+    tmp = np.tensordot(H, AARAAH, axes=([0,1,2,3], [1,2,3,5]))
+
+    if(getE):
+        Q = np.transpose(np.diag(np.conjugate(R)), (1, 0))
+        QHAAAA = np.tensordot(Q, tmp, axes=([1,0]))
+        return np.trace(QHAAAA)
+    else:
+        Q = np.diag(np.power(R, 2))
+        QHAAAA = np.tensordot(Q, tmp, axes=([1,0]))
+        print "Q\n", Q, "\nQHAAAA\n", QHAAAA
+        return QHAAAA.reshape(chi * chi)
+
+def linearOpForK(MPS, R, K):
+    chir, chic, aux = MPS.shape
+    K = np.reshape(K, (chir, chic))
+    Q = np.diag(np.power(R, 2))
+    QK = np.tensordot(Q, K, axes=([1,0]))
+    EQK = linearOpForR(MPS, QK.reshape(chir * chic))
+    EQK = np.reshape(EQK, (chir, chic))
+    QEQK = np.tensordot(Q, EQK, axes=([1,0]))
+    tmp = K - QEQK
+
+    return tmp.reshape(chir * chic)
+
+def calcHmeanval(MPS, R, H):
+    QHAAAA = getQHaaaa(MPS, R, H)
+    chir, chic, aux = MPS.shape
+
+    linOpWrapped = functools.partial(linearOpForK, MPS, R)
+    linOpForBicg = spspla.LinearOperator((chir * chir, chic * chic), 
+                                         matvec = linOpWrapped, 
+                                         dtype = 'complex64')
+    K, info = spspla.bicgstab(linOpForBicg, QHAAAA, tol=expS, 
+                              maxiter=maxIter)
+    if(info != 0): print "\nWARNING: bicgstab failed!\n"
+    K = np.reshape(K, (chir, chic))
+
+    print "Energy density =", getQHaaaa(MPS, R, H, True)
+    return K
+
 
 """Main...
 """
@@ -174,4 +220,5 @@ print "theR =", theR
 theC = buildHElements(theA, theH)
 print "theC =", theC.shape
 
-calcHmeanval(theA, theR, theH)
+theK = calcHmeanval(theA, theR, theH)
+print "theK =", theK.shape
