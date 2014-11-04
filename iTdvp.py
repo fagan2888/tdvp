@@ -264,6 +264,38 @@ def calcFs(MPS, C, R, K, VR):
 
     return tmp
 
+def getUpdateB(R, x, VR):
+    Rsqrti = Lsqrti = np.diag(map(np.sqrt, 1./R))
+
+    row, col, aux = VR.shape
+    if(row*col == 0):
+        row, row = Lsqrti.shape
+        tmp = np.zeros((row, col, aux))
+    else:
+        VRRsi = np.tensordot(VR, Rsqrti, axes=([1,0]))
+        VRRsi = np.transpose(VRRsi, (0, 2, 1))
+        xVRRsi = np.tensordot(x, VRRsi, axes=([1,0]))
+        tmp = np.tensordot(Lsqrti, xVRRsi, axes=([1,0]))
+
+    print Lsqrti.shape, x.shape, VR.shape, tmp.shape
+
+    return tmp
+
+def doUpdateForA(MPS, B):
+    """
+    It does the actual update to the MPS state for given time step.
+
+    The update is done according to the formula:
+    A[n, t + dTau] = A[n, t] - dTau * B[x*](n),
+    where dTau is the corresponding time step.
+    """
+    MPS -= dTau * B
+    print "cmp shapes =", MPS.shape, B.shape
+
+    return MPS
+
+
+
 
 """Main...
 """
@@ -272,6 +304,7 @@ d = 2
 xi = 3
 expS = 1e-12
 maxIter = 200
+dTau = 0.1
 
 xir = xic = xi
 theA = np.random.rand(xir, xic, d) - .5
@@ -293,3 +326,8 @@ print "theVR =", theVR.shape
 
 theF = calcFs(theA, theC, theR, theK, theVR)
 print "theF =", theF.shape
+
+theB = getUpdateB(theR, theF, theVR)
+print "theB =", theB.shape
+
+doUpdateForA(theA, theB)
