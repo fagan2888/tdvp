@@ -199,6 +199,40 @@ def calcHmeanval(MPS, R, H):
     print "Energy density =", getQHaaaa(MPS, R, H, True)
     return K
 
+def nullSpaceR(MPS, R):
+    print "IN NULL SPACE R"
+    RR = np.transpose(np.conjugate(MPS), (1, 0, 2))
+    RR = np.tensordot(np.diag(map(np.sqrt, R)), RR, axes=([1,0]))
+    chir, chic, aux = RR.shape
+
+    RR = np.transpose(RR, (0, 2, 1))
+    RR = np.reshape(RR, (chir * aux, chic))
+    U, S, V = np.linalg.svd(RR, full_matrices=True)
+
+    #dimS, = S.shape
+    #extraS = np.zeros((chir * aux) - dimS)
+    #Sp = np.append(S, extraS, 0)
+    #maskp = (Sp < epsS) #try: np.select(...)
+
+    mask = np.empty(chir * aux, dtype=bool)
+    mask[:] = False; mask[chic:] = True
+    VRdag = np.compress(mask, U, axis=1)
+
+    RR = np.conjugate(np.transpose(RR))
+    Null = np.tensordot(RR, VRdag, axes=([1,0]))
+    Id = np.tensordot(VRdag.T, VRdag, axes=([1,0]))
+
+    tmp = np.conjugate(VRdag.T)
+    lpr, lmz = tmp.shape
+    tmp = np.reshape(tmp, (lpr, chir, aux))
+ 
+    print "mask =", mask, S, "\nU\n", U, "\nVRdag\n", VRdag, \
+        "\nNull\n", Null, "\nVV+\n", Id, "\nVR =", tmp.shape
+    del R, U, S, V, VRdag, Null, Id
+
+    return tmp
+
+
 
 """Main...
 """
@@ -222,3 +256,5 @@ print "theC =", theC.shape
 
 theK = calcHmeanval(theA, theR, theH)
 print "theK =", theK.shape
+
+nullSpaceR(theA, theR)
