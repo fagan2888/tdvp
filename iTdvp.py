@@ -61,9 +61,7 @@ def symmNormalization(MPS, chir, chic):
 
     omega, R = spspla.eigs(AA, k=1, which='LR', tol=expS, 
                            maxiter=maxIter)
-    print "w(1) =", omega
-    ##Aval, Avec = spla.eig(AA)
-    ##print Aval
+    print "w(1) =", omega, "\nR\n", R.reshape(chir, chic)
 
     linOpWrapped = functools.partial(linearOpForR, MPS)
     linOpForEigs = spspla.LinearOperator((chir * chic, chir * chic), 
@@ -72,8 +70,6 @@ def symmNormalization(MPS, chir, chic):
                            maxiter=maxIter)
     R = R.reshape(chir, chic)
     print "w(1) =", omega, "\nR\n", R
-    ##omega, R = powerMethod(MPS, dir='R')
-    ##print "w(1) =", omega, "\nR\n", R
 
 
     R = spla.sqrtm(R)
@@ -90,8 +86,6 @@ def symmNormalization(MPS, chir, chic):
                            maxiter=maxIter)
     L = L.reshape(chir, chic)
     print "w(1) =", omega, "\nL\n", L
-    ##omega, L = powerMethod(MPS, dir='L')
-    ##print "w(1) =", omega, "\nL\n", L
 
 
     eval, evec = spla.eig(L)
@@ -111,11 +105,19 @@ def symmNormalization(MPS, chir, chic):
     MPS /= np.sqrt(omega)
     print "New MPS =", MPS.shape
 
-    omega, L = powerMethod(MPS, dir='L')
-    print "chk =", omega, "\nL\n", L
+    linOpWrapped = functools.partial(linearOpForL, MPS)
+    linOpForEigs = spspla.LinearOperator((chir * chic, chir * chic), 
+                                         matvec = linOpWrapped)
+    omega, L = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
+                           maxiter=maxIter)
+    print "chk =", omega, "\nL\n", L.reshape(chir, chic)
 
-    omega, R = powerMethod(MPS, dir='R')
-    print "chk =", omega, "\nR\n", R
+    linOpWrapped = functools.partial(linearOpForR, MPS)
+    linOpForEigs = spspla.LinearOperator((chir * chic, chir * chic), 
+                                         matvec = linOpWrapped)
+    omega, R = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
+                           maxiter=maxIter)
+    print "chk =", omega, "\nR\n", R.reshape(chir, chic)
 
     return np.diag(map(np.abs, L))
 
@@ -286,11 +288,10 @@ def doUpdateForA(MPS, B):
 
 
 
-
 """Main...
 """
 d = 2
-xi = 30
+xi = 3
 expS = 1e-12
 maxIter = 200
 dTau = 0.1
@@ -306,7 +307,7 @@ while (I != maxIter):
 
     theR = symmNormalization(theA, xir, xic)
     print "theR =", theR
-
+    exit()
     theC = buildHElements(theA, theH)
     print "theC =", theC.shape
 
