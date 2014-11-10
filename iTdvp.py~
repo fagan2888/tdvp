@@ -47,27 +47,27 @@ def linearOpForL(MPS, L):
 
     return AHLA.reshape(chir * chic)
 
-def symmNormalization(MPS, chir, chic):
-    """Returns a symmetric normalized MPS.
-
-    This is really tricky business!
-    """
+def buildLargeE(MPS):
+    chir, chic, aux = MPS.shape
     AH = np.transpose(np.conjugate(MPS), (1, 0, 2))
     AA = np.tensordot(MPS, AH, axes=([2,2]))
     AA = np.transpose(AA, (0, 1, 3, 2))
     AA = np.transpose(AA, (0, 2, 1, 3))
     AA = np.reshape(AA, (chir * chic, chir * chic))
-    ##print "AA =\n", AA
+    #print "AA =\n", AA
 
-    omega, R = spspla.eigs(AA, k=1, which='LR', tol=expS, 
-                           maxiter=maxIter)
-    print "w(1) =", omega, "\nR\n", R.reshape(chir, chic)
+    return AA
 
-    linOpWrapped = functools.partial(linearOpForR, MPS)
-    linOpForEigs = spspla.LinearOperator((chir * chic, chir * chic), 
-                                         matvec = linOpWrapped)
-    omega, R = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
-                           maxiter=maxIter)
+def biuldKronE(MPS):
+    pass
+
+def symmNormalization(MPS, chir, chic):
+    """Returns a symmetric normalized MPS.
+
+    This is really tricky business!
+    """
+    AA = buildLargeE(MPS)
+    omega, R = spspla.eigs(AA, k=1, which='LR')
     R = R.reshape(chir, chic)
     print "w(1) =", omega, "\nR\n", R
 
@@ -79,11 +79,8 @@ def symmNormalization(MPS, chir, chic):
     MPS = np.transpose(A, (0, 2, 1))
 
 
-    linOpWrapped = functools.partial(linearOpForL, MPS)
-    linOpForEigs = spspla.LinearOperator((chir * chic, chir * chic), 
-                                         matvec = linOpWrapped)
-    omega, L = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
-                           maxiter=maxIter)
+    AA = buildLargeE(MPS)
+    omega, L = spspla.eigs(AA, k=1, which='LR')
     L = L.reshape(chir, chic)
     print "w(1) =", omega, "\nL\n", L
 
