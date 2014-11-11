@@ -6,7 +6,7 @@ import scipy.linalg as spla
 import functools
 import cmath
 
-np.set_printoptions(suppress=True, precision=3)
+np.set_printoptions(suppress=True)#, precision=3)
 
 def powerMethod(MPS, dir):
     eval = 1234.5678
@@ -61,7 +61,7 @@ def symmNormalization(MPS, chir, chic):
     """Returns a symmetric normalized MPS.
 
     This is really tricky business!
-    """
+
     AA = buildLargeE(MPS)
     omega, RX = spspla.eigs(AA, k=1, which='LR', tol=expS, 
                            maxiter=maxIter)
@@ -72,47 +72,26 @@ def symmNormalization(MPS, chir, chic):
                             which='LR', tol=expS, maxiter=maxIter)
     print "w(1) =", omega, "\nLX\n", LX.reshape(chir, chic)
     """
-    R = spla.sqrtm(R)
-    A = np.tensordot(MPS, R, axes=([1,0]))
-    R = spla.inv(R)
-    A = np.tensordot(R, A, axes=([1,0]))
-    MPS = np.transpose(A, (0, 2, 1))
-
-
-    AA = buildLargeE(MPS)
-    omega, L = spspla.eigs(AA, k=1, which='LR')
-    L = L.reshape(chir, chic)
-    print "w(1) =", omega, "\nL\n", L
-
-
-    eval, evec = spla.eig(L)
-    print eval, "\n", evec
-    A = np.tensordot(MPS, evec, axes=([1,0]))
-    evec = np.conjugate(evec.T)
-    MPS = np.tensordot(evec, A, axes=([1,0]))
-    MPS = np.transpose(MPS, (0, 2, 1))
-
-
-    eval = map(np.sqrt, map(np.sqrt, eval))
-    A = np.tensordot(np.diag(eval), MPS, axes=([1,0]))
-    eval = 1/np.asarray(eval)
-    MPS = np.tensordot(A, np.diag(eval), axes=([1,0]))
-    MPS = np.transpose(MPS, (0, 2, 1))
-
-    MPS /= np.sqrt(omega)
-    print "New MPS =", MPS.shape
-    """
-
     linOpWrapped = functools.partial(linearOpForR, MPS)
     linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
                                          matvec = linOpWrapped)
     omega, R = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
                            maxiter=maxIter)
-    print "chk =", omega, "\nR\n", R.reshape(chir, chic)
-    phase = cmath.exp(-1j*cmath.phase(RX[0,0]))
-    print "RX'\n", phase*RX.reshape(chir, chic)
-    phase = cmath.exp(-1j*cmath.phase(R[0,0]))
-    print "R'\n", phase*R.reshape(chir, chic)
+    R = R.reshape(chir, chic)
+    phase = cmath.exp(-1j * cmath.phase(R[0,0]))
+    R = phase * R
+    if(np.fabs(R[1,0].imag) < expS): R = R.real
+    print "wR", omega, "p", phase, "R\n", R
+
+
+    R = spla.sqrtm(R)
+    if(np.fabs(R[1,0].imag) < expS): R = R.real
+    print "Rsqrt\n", R
+    A = np.tensordot(MPS, R, axes=([1,0]))
+    R = spla.inv(R)
+    print "Rinv\n", R
+    A = np.tensordot(R, A, axes=([1,0]))
+    MPS = np.transpose(A, (0, 2, 1))
 
 
     linOpWrapped = functools.partial(linearOpForL, MPS)
@@ -120,14 +99,58 @@ def symmNormalization(MPS, chir, chic):
                                          matvec = linOpWrapped)
     omega, L = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
                            maxiter=maxIter)
-    print "chk =", omega, "\nL\n", L.reshape(chir, chic)
-    phase = cmath.exp(-1j*cmath.phase(LX[0,0]))
-    print "LX'\n", phase*LX.reshape(chir, chic)
-    phase = cmath.exp(-1j*cmath.phase(L[0,0]))
-    print "L'\n", phase*L.reshape(chir, chic)
+    L = L.reshape(chir, chic)
+    phase = cmath.exp(-1j * cmath.phase(L[0,0]))
+    L = phase * L
+    if(np.fabs(L[1,0].imag) < expS): L = L.real
+    print "wL", omega, "p", phase, "L\n", L
 
 
-    return 0#np.diag(map(np.abs, L))
+    eval, evec = spla.eig(L)
+    print "eval ", eval, "\n", evec
+    A = np.tensordot(MPS, evec, axes=([1,0]))
+    evec = np.transpose(np.conjugate(evec))
+    MPS = np.tensordot(evec, A, axes=([1,0]))
+    MPS = np.transpose(MPS, (0, 2, 1))
+
+
+    eval = map(np.sqrt, map(np.sqrt, eval))
+    A = np.tensordot(np.diag(eval), MPS, axes=([1,0]))
+    eval = 1. / np.asarray(eval)
+    MPS = np.tensordot(A, np.diag(eval), axes=([1,0]))
+    MPS = np.transpose(MPS, (0, 2, 1))
+
+
+    MPS /= np.sqrt(omega)
+    if(np.fabs(MPS[0,0,0].imag) < expS): MPS = MPS.real
+    print "New MPS =", MPS.shape, "\n", MPS
+
+    ######### CHECKING RESULT #########
+
+    linOpWrapped = functools.partial(linearOpForL, MPS)
+    linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
+                                         matvec = linOpWrapped)
+    omega, L = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
+                           maxiter=maxIter)
+    L = L.reshape(chir, chic)
+    phase = cmath.exp(-1j * cmath.phase(L[0,0]))
+    L = phase * L
+    if(np.fabs(L[1,0].imag) < expS): L = L.real
+    print "wL", omega, "p", phase, "L\n", L
+
+    linOpWrapped = functools.partial(linearOpForR, MPS)
+    linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
+                                         matvec = linOpWrapped)
+    omega, R = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
+                           maxiter=maxIter)
+    R = R.reshape(chir, chic)
+    phase = cmath.exp(-1j * cmath.phase(R[0,0]))
+    R = phase * R
+    if(np.fabs(R[1,0].imag) < expS): R = R.real
+    print "wR", omega, "p", phase, "R\n", R
+
+    return 0
+
 
 def buildLocalH():
     """Builds local hamiltonian (d x d)-matrix.
@@ -305,8 +328,7 @@ maxIter = 200
 dTau = 0.1
 
 xir = xic = xi
-theA = np.random.rand(xir, xic, d) - .5 + 1j * (np.random.rand(xir, xic, d) - .5)
-#theA = np.random.rand(xir, xic, d) - .5 #+ 1j * np.zeros((xir, xic, d))
+theA = np.random.rand(xir, xic, d) - .5# + 1j * (np.random.rand(xir, xic, d) - .5)
 
 #theH = buildLocalH()
 #print "theH\n", theH.reshape(d*d, d*d)
