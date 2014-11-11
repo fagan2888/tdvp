@@ -57,6 +57,26 @@ def buildLargeE(MPS):
 
     return AA
 
+def getLargestW(MPS, dir):
+    chir, chic, aux = MPS.shape
+
+    if(dir == 'R'):
+        linOpWrapped = functools.partial(linearOpForR, MPS)
+    else:
+        linOpWrapped = functools.partial(linearOpForL, MPS)
+
+    linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
+                                         matvec = linOpWrapped)
+    omega, X = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
+                           maxiter=maxIter)
+    X = X.reshape(chir, chic)
+
+    phase = cmath.exp(-1j * cmath.phase(X[0,0]))
+    X = phase * X
+    if(np.fabs(X[1,0].imag) < expS): X = X.real
+
+    return omega, X
+
 def symmNormalization(MPS, chir, chic):
     """Returns a symmetric normalized MPS.
 
@@ -72,16 +92,8 @@ def symmNormalization(MPS, chir, chic):
                             which='LR', tol=expS, maxiter=maxIter)
     print "w(1) =", omega, "\nLX\n", LX.reshape(chir, chic)
     """
-    linOpWrapped = functools.partial(linearOpForR, MPS)
-    linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
-                                         matvec = linOpWrapped)
-    omega, R = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
-                           maxiter=maxIter)
-    R = R.reshape(chir, chic)
-    phase = cmath.exp(-1j * cmath.phase(R[0,0]))
-    R = phase * R
-    if(np.fabs(R[1,0].imag) < expS): R = R.real
-    print "wR", omega, "p", phase, "R\n", R
+    omega, R = getLargestW(MPS, 'R')
+    print "wR", omega, "R\n", R
 
 
     R = spla.sqrtm(R)
@@ -94,16 +106,8 @@ def symmNormalization(MPS, chir, chic):
     MPS = np.transpose(A, (0, 2, 1))
 
 
-    linOpWrapped = functools.partial(linearOpForL, MPS)
-    linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
-                                         matvec = linOpWrapped)
-    omega, L = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
-                           maxiter=maxIter)
-    L = L.reshape(chir, chic)
-    phase = cmath.exp(-1j * cmath.phase(L[0,0]))
-    L = phase * L
-    if(np.fabs(L[1,0].imag) < expS): L = L.real
-    print "wL", omega, "p", phase, "L\n", L
+    omega, L = getLargestW(MPS, 'L')
+    print "wL", omega, "L\n", L
 
 
     eval, evec = spla.eig(L)
@@ -123,34 +127,17 @@ def symmNormalization(MPS, chir, chic):
 
     MPS /= np.sqrt(omega)
     if(np.fabs(MPS[0,0,0].imag) < expS): MPS = MPS.real
-    print "New MPS =", MPS.shape, "\n", MPS
+    #print "New MPS =", MPS.shape, "\n", MPS
 
     ######### CHECKING RESULT #########
 
-    linOpWrapped = functools.partial(linearOpForL, MPS)
-    linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
-                                         matvec = linOpWrapped)
-    omega, L = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
-                           maxiter=maxIter)
-    L = L.reshape(chir, chic)
-    phase = cmath.exp(-1j * cmath.phase(L[0,0]))
-    L = phase * L
-    if(np.fabs(L[1,0].imag) < expS): L = L.real
-    print "wL", omega, "p", phase, "L\n", L
+    omega, L = getLargestW(MPS, 'L')
+    print "wL", omega, "L\n", L
 
-    linOpWrapped = functools.partial(linearOpForR, MPS)
-    linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
-                                         matvec = linOpWrapped)
-    omega, R = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
-                           maxiter=maxIter)
-    R = R.reshape(chir, chic)
-    phase = cmath.exp(-1j * cmath.phase(R[0,0]))
-    R = phase * R
-    if(np.fabs(R[1,0].imag) < expS): R = R.real
-    print "wR", omega, "p", phase, "R\n", R
+    omega, R = getLargestW(MPS, 'R')
+    print "wR", omega, "R\n", R
 
-    return 0
-
+    return np.diag(R)
 
 def buildLocalH():
     """Builds local hamiltonian (d x d)-matrix.
