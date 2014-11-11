@@ -224,7 +224,6 @@ def calcHmeanval(MPS, R, H):
     return K
 
 def nullSpaceR(MPS, R):
-    print "IN NULL SPACE R"
     RR = np.transpose(np.conjugate(MPS), (1, 0, 2))
     RR = np.tensordot(np.diag(map(np.sqrt, R)), RR, axes=([1,0]))
     chir, chic, aux = RR.shape
@@ -249,20 +248,19 @@ def nullSpaceR(MPS, R):
     tmp = np.conjugate(VRdag.T)
     lpr, lmz = tmp.shape
     tmp = np.reshape(tmp, (lpr, chir, aux))
- 
-    print "mask =", mask, S, "\nU\n", U, "\nVRdag\n", VRdag, \
+
+    print "mask =", mask, "\n", S, "\nU\n", U, "\nVRdag\n", VRdag, \
         "\nNull\n", Null, "\nVV+\n", Id, "\nVR =", tmp.shape
     del R, U, S, V, VRdag, Null, Id
 
     return tmp
 
 def calcFs(MPS, C, R, K, VR):
-    tmp1 = tmp2 = tmp3 = 0.
     VRdag = np.transpose(np.conjugate(VR), (1, 0, 2))
     Lsqrt = Rsqrt = np.diag(map(np.sqrt, R))
     Lsqrti = Rsqrti = np.diag(map(np.sqrt, 1./R))
-
     A = np.transpose(np.conjugate(MPS), (1, 0, 2))
+
     RsiVRdag = np.tensordot(Rsqrti, VRdag, axes=([1,0]))
     ARsiVRdag = np.tensordot(A, RsiVRdag, axes=([1,0]))
     RARsiVRdag = np.tensordot(np.diag(R), ARsiVRdag, axes=([1,0]))
@@ -273,7 +271,6 @@ def calcFs(MPS, C, R, K, VR):
     RsVRdag = np.tensordot(Rsqrt, VRdag, axes=([1,0]))
     CRsVRdag = np.tensordot(C, RsVRdag, axes=([1,3], [0,2]))
     LCRsVRdag = np.tensordot(np.diag(R), CRsVRdag, axes=([1,0]))
-    A = np.transpose(np.conjugate(MPS), (1, 0, 2))
     ALCRsVRdag = np.tensordot(A, LCRsVRdag, axes=([1,2], [0,1]))
     tmp2 = np.tensordot(Lsqrti, ALCRsVRdag, axes=([1,0]))
     #print tmp2
@@ -285,6 +282,7 @@ def calcFs(MPS, C, R, K, VR):
     #print tmp3
 
     tmp = tmp1 + tmp2 + tmp3
+    print "F\n", tmp
 
     return tmp
 
@@ -345,13 +343,13 @@ while (I != maxIter):
 
     theK = calcHmeanval(theA, theR, theH)
     print "theK =", theK.shape
-    exit()
 
     theVR = nullSpaceR(theA, theR)
     print "theVR =", theVR.shape
 
     theF = calcFs(theA, theC, theR, theK, theVR)
     print "theF =", theF.shape
+    exit()
 
     theB = getUpdateB(theR, theF, theVR)
     print "theB =", theB.shape
