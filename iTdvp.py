@@ -66,7 +66,8 @@ def getLargestW(MPS, dir):
         linOpWrapped = functools.partial(linearOpForL, MPS)
 
     linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
-                                         matvec = linOpWrapped)
+                                         matvec = linOpWrapped, 
+                                         dtype='float64')
     omega, X = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
                            maxiter=maxIter)
     X = X.reshape(chir, chic)
@@ -137,6 +138,8 @@ def symmNormalization(MPS, chir, chic):
     omega, R = getLargestW(MPS, 'R')
     print "wR", omega, "R\n", R
 
+    print "tr(R**2) =", np.trace(R**2), "tr(L**2) =", np.trace(L**2)
+
     return np.diag(R)
 
 def buildLocalH():
@@ -163,28 +166,39 @@ def buildHElements(MPS, H):
 
     return C
 
-def getQHaaaa(MPS, R, H, getE = False):
-    chi, = R.shape
+def getQHaaaaR(MPS, R, H, getE = False):
+    """Returns either the energy density or the RHS of eq. for |K).
+    """
+    chir, chic, aux = MPS.shape
     AA = np.tensordot(MPS, MPS, axes=([1,0]))
     AAH = np.transpose(np.conjugate(AA), (2, 1, 0, 3))
     AAR = np.tensordot(AA, np.diag(R), axes=([2,0]))
     AARAAH = np.tensordot(AAR, AAH, axes=([3,0]))
-    tmp = np.tensordot(H, AARAAH, axes=([0,1,2,3], [1,2,3,5]))
+    HAAAAR = np.tensordot(H, AARAAH, axes=([0,1,2,3], [1,2,3,5]))
+
+    L = np.transpose(np.diag(np.conjugate(R)), (1, 0))
 
     if(getE):
-        Q = np.transpose(np.diag(np.conjugate(R)), (1, 0))
-        QHAAAA = np.tensordot(Q, tmp, axes=([1,0]))
-        return np.trace(QHAAAA)
+        LHAAAAR = np.tensordot(L, HAAAAR, axes=([1,0]))
+        return np.trace(LHAAAAR)
     else:
-        Q = np.diag(np.power(R, 2))
-        QHAAAA = np.tensordot(Q, tmp, axes=([1,0]))
-        print "Q\n", Q, "\nQHAAAA\n", QHAAAA
-        return QHAAAA.reshape(chi * chi)
+        Q = np.eye(chir, chic) - np.tensordot(np.diag(R), L, axes=([1,0]))
+        QHAAAAR = np.tensordot(Q, HAAAAR, axes=([1,0]))
+        print "Q\n", Q, "\nQHAAAAR\n", QHAAAAR
+        return QHAAAAR.reshape(chir * chic)
 
 def linearOpForK(MPS, R, K):
+    """Returns ...
+
+    Instead of defining QEQ as the regularized operator, we could 
+    define QEQ = E - S = Q - |r)(l|; therefore avoiding more matrix 
+    multiplications. Is this true?
+    """
     chir, chic, aux = MPS.shape
     K = np.reshape(K, (chir, chic))
-    Q = np.diag(np.power(R, 2))
+    L = np.transpose(np.diag(np.conjugate(R)), (1, 0))
+    Q = np.eye(chir, chic) - np.tensordot(np.diag(R), L, axes=([1,0]))
+
     QK = np.tensordot(Q, K, axes=([1,0]))
     EQK = linearOpForR(MPS, QK.reshape(chir * chic))
     EQK = np.reshape(EQK, (chir, chic))
@@ -194,19 +208,19 @@ def linearOpForK(MPS, R, K):
     return tmp.reshape(chir * chic)
 
 def calcHmeanval(MPS, R, H):
-    QHAAAA = getQHaaaa(MPS, R, H)
     chir, chic, aux = MPS.shape
+    QHAAAAR = getQHaaaaR(MPS, R, H)
 
     linOpWrapped = functools.partial(linearOpForK, MPS, R)
     linOpForBicg = spspla.LinearOperator((chir * chir, chic * chic), 
                                          matvec = linOpWrapped, 
-                                         dtype = 'complex64')
-    K, info = spspla.bicgstab(linOpForBicg, QHAAAA, tol=expS, 
+                                         dtype='float64')
+    K, info = spspla.bicgstab(linOpForBicg, QHAAAAR, tol=expS, 
                               maxiter=maxIter)
     if(info != 0): print "\nWARNING: bicgstab failed!\n"
     K = np.reshape(K, (chir, chic))
 
-    print "Energy density =", getQHaaaa(MPS, R, H, True)
+    print "Energy density =", getQHaaaaR(MPS, R, H, True)
     return K
 
 def nullSpaceR(MPS, R):
@@ -317,14 +331,13 @@ dTau = 0.1
 xir = xic = xi
 theA = np.random.rand(xir, xic, d) - .5# + 1j * (np.random.rand(xir, xic, d) - .5)
 
-#theH = buildLocalH()
-#print "theH\n", theH.reshape(d*d, d*d)
+theH = buildLocalH()
+print "theH\n", theH.reshape(d*d, d*d)
 
 I = 0
 while (I != maxIter):
 
     theR = symmNormalization(theA, xir, xic)
-    exit()
     print "theR =", theR
 
     theC = buildHElements(theA, theH)
@@ -332,6 +345,7 @@ while (I != maxIter):
 
     theK = calcHmeanval(theA, theR, theH)
     print "theK =", theK.shape
+    exit()
 
     theVR = nullSpaceR(theA, theR)
     print "theVR =", theVR.shape
