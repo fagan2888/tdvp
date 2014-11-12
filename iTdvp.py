@@ -66,17 +66,21 @@ def getLargestW(MPS, dir):
         linOpWrapped = functools.partial(linearOpForL, MPS)
 
     linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
-                                         matvec = linOpWrapped, 
-                                         dtype='float64')
+                                         matvec = linOpWrapped)
+                                         #dtype = 'complex128')
     omega, X = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
                            maxiter=maxIter)
     X = X.reshape(chir, chic)
 
-    phase = cmath.exp(-1j * cmath.phase(X[0,0]))
-    X = phase * X
-    if(np.fabs(X[1,0].imag) < expS): X = X.real
-
     return omega, X
+
+def fixPhase(X):
+    Y = X / np.trace(X)
+    norm = np.tensordot(np.transpose(np.conjugate(Y)), Y, axes=([1,0]))
+    norm = np.sqrt(np.trace(norm))
+    Y = Y / norm
+
+    return Y
 
 def symmNormalization(MPS, chir, chic):
     """Returns a symmetric normalized MPS.
@@ -94,53 +98,59 @@ def symmNormalization(MPS, chir, chic):
     print "w(1) =", omega, "\nLX\n", LX.reshape(chir, chic)
     """
     omega, R = getLargestW(MPS, 'R')
+    R = fixPhase(R)
     print "wR", omega, "R\n", R
 
 
     R = spla.sqrtm(R)
-    if(np.fabs(R[1,0].imag) < expS): R = R.real
+    R = fixPhase(R)
     print "Rsqrt\n", R
     A = np.tensordot(MPS, R, axes=([1,0]))
     R = spla.inv(R)
     print "Rinv\n", R
     A = np.tensordot(R, A, axes=([1,0]))
-    MPS = np.transpose(A, (0, 2, 1))
+    nMPS = np.transpose(A, (0, 2, 1))
 
 
-    omega, L = getLargestW(MPS, 'L')
+    omega, L = getLargestW(nMPS, 'L')
+    L = fixPhase(L)
     print "wL", omega, "L\n", L
 
 
     eval, evec = spla.eig(L)
     print "eval ", eval, "\n", evec
-    A = np.tensordot(MPS, evec, axes=([1,0]))
+    A = np.tensordot(nMPS, evec, axes=([1,0]))
     evec = np.transpose(np.conjugate(evec))
-    MPS = np.tensordot(evec, A, axes=([1,0]))
-    MPS = np.transpose(MPS, (0, 2, 1))
+    nMPS = np.tensordot(evec, A, axes=([1,0]))
+    nMPS = np.transpose(nMPS, (0, 2, 1))
 
 
     eval = map(np.sqrt, map(np.sqrt, eval))
-    A = np.tensordot(np.diag(eval), MPS, axes=([1,0]))
+    A = np.tensordot(np.diag(eval), nMPS, axes=([1,0]))
     eval = 1. / np.asarray(eval)
-    MPS = np.tensordot(A, np.diag(eval), axes=([1,0]))
-    MPS = np.transpose(MPS, (0, 2, 1))
+    nMPS = np.tensordot(A, np.diag(eval), axes=([1,0]))
+    nMPS = np.transpose(nMPS, (0, 2, 1))
 
 
-    MPS /= np.sqrt(omega)
-    if(np.fabs(MPS[0,0,0].imag) < expS): MPS = MPS.real
-    #print "New MPS =", MPS.shape, "\n", MPS
+    nMPS = nMPS / np.sqrt(omega)
+    print "New MPS =", nMPS.shape, "\n", nMPS
 
     ######### CHECKING RESULT #########
 
-    omega, L = getLargestW(MPS, 'L')
+    omega, L = getLargestW(nMPS, 'L')
+    L = fixPhase(L)
     print "wL", omega, "L\n", L
 
-    omega, R = getLargestW(MPS, 'R')
+    omega, R = getLargestW(nMPS, 'R')
+    R = fixPhase(R)
     print "wR", omega, "R\n", R
 
-    print "tr(R**2) =", np.trace(R**2), "tr(L**2) =", np.trace(L**2)
+    print "tr(RR+) =", np.trace(np.tensordot(np.transpose(
+                np.conjugate(R)), R, axes=([1,0]))), 
+    print "tr(LL+) =", np.trace(np.tensordot(np.transpose(
+                np.conjugate(L)), L, axes=([1,0])))
 
-    return np.diag(R)
+    return np.diag(R), nMPS
 
 def buildLocalH():
     """Builds local hamiltonian (d x d)-matrix.
@@ -176,7 +186,8 @@ def getQHaaaaR(MPS, R, H, getE = False):
     AARAAH = np.tensordot(AAR, AAH, axes=([3,0]))
     HAAAAR = np.tensordot(H, AARAAH, axes=([0,1,2,3], [1,2,3,5]))
 
-    L = np.transpose(np.diag(np.conjugate(R)), (1, 0))
+    #L = np.transpose(np.diag(np.conjugate(R)), (1, 0))
+    L = np.transpose(np.diag(R), (1, 0))
 
     if(getE):
         LHAAAAR = np.tensordot(L, HAAAAR, axes=([1,0]))
@@ -196,7 +207,8 @@ def linearOpForK(MPS, R, K):
     """
     chir, chic, aux = MPS.shape
     K = np.reshape(K, (chir, chic))
-    L = np.transpose(np.diag(np.conjugate(R)), (1, 0))
+    #L = np.transpose(np.diag(np.conjugate(R)), (1, 0))
+    L = np.transpose(np.diag(R), (1, 0))
     Q = np.eye(chir, chic) - np.tensordot(np.diag(R), L, axes=([1,0]))
 
     QK = np.tensordot(Q, K, axes=([1,0]))
@@ -214,10 +226,10 @@ def calcHmeanval(MPS, R, H):
     linOpWrapped = functools.partial(linearOpForK, MPS, R)
     linOpForBicg = spspla.LinearOperator((chir * chir, chic * chic), 
                                          matvec = linOpWrapped, 
-                                         dtype='float64')
+                                         dtype = 'complex128')
     K, info = spspla.bicgstab(linOpForBicg, QHAAAAR, tol=expS, 
                               maxiter=maxIter)
-    if(info != 0): print "\nWARNING: bicgstab failed!\n"
+    if(info != 0): print "\nWARNING: bicgstab failed!\n"; exit()
     K = np.reshape(K, (chir, chic))
 
     print "Energy density =", getQHaaaaR(MPS, R, H, True)
@@ -243,9 +255,9 @@ def nullSpaceR(MPS, R):
 
     RR = np.conjugate(np.transpose(RR))
     Null = np.tensordot(RR, VRdag, axes=([1,0]))
-    Id = np.tensordot(VRdag.T, VRdag, axes=([1,0]))
+    Id = np.tensordot(np.transpose(VRdag), VRdag, axes=([1,0]))
 
-    tmp = np.conjugate(VRdag.T)
+    tmp = np.conjugate(np.transpose(VRdag))
     lpr, lmz = tmp.shape
     tmp = np.reshape(tmp, (lpr, chir, aux))
 
@@ -300,6 +312,7 @@ def getUpdateB(R, x, VR):
         tmp = np.tensordot(Lsqrti, xVRRsi, axes=([1,0]))
 
     print Lsqrti.shape, x.shape, VR.shape, tmp.shape
+    print "B\n", tmp
 
     return tmp
 
@@ -311,31 +324,33 @@ def doUpdateForA(MPS, B):
     A[n, t + dTau] = A[n, t] - dTau * B[x*](n),
     where dTau is the corresponding time step.
     """
-    MPS -= dTau * B
+    nMPS = MPS - dTau * B
     print "cmp shapes =", MPS.shape, B.shape
 
-    return MPS
+    return nMPS
 
 
 
 """Main...
 """
 d = 2
-xi = 3
-expS = 1e-12
-maxIter = 200
+xi = 50
+expS = 1e-10
+maxIter = 800
 dTau = 0.1
 
 xir = xic = xi
-theA = np.random.rand(xir, xic, d) - .5# + 1j * (np.random.rand(xir, xic, d) - .5)
+theA = np.random.rand(xir, xic, d) - .5 + 1j * np.zeros((xir, xic, d))
+print "theMPS\n", theA
 
 theH = buildLocalH()
 print "theH\n", theH.reshape(d*d, d*d)
 
 I = 0
 while (I != maxIter):
+    print "\t\t\t\t############# NEW ITERATION", I, "#############"
 
-    theR = symmNormalization(theA, xir, xic)
+    theR, theA = symmNormalization(theA, xir, xic)
     print "theR =", theR
 
     theC = buildHElements(theA, theH)
@@ -349,11 +364,10 @@ while (I != maxIter):
 
     theF = calcFs(theA, theC, theR, theK, theVR)
     print "theF =", theF.shape
-    exit()
 
     theB = getUpdateB(theR, theF, theVR)
     print "theB =", theB.shape
 
-    doUpdateForA(theA, theB)
+    theA = doUpdateForA(theA, theB)
 
     I += 1
