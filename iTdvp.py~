@@ -36,7 +36,7 @@ def linearOpForR(MPS, R):
     AH = np.transpose(np.conjugate(MPS), (1, 0, 2))
     ARAH = np.tensordot(AR, AH, axes=([1,2], [2,0]))
 
-    return ARAH.reshape(chir * chic, 1)
+    return ARAH.reshape(chir * chic)
 
 def linearOpForL(MPS, L):
     chir, chic, aux = MPS.shape
@@ -45,14 +45,14 @@ def linearOpForL(MPS, L):
     AH = np.transpose(np.conjugate(MPS), (1, 0, 2))
     AHLA = np.tensordot(AH, LA, axes=([1,2], [0,2]))
 
-    return AHLA.reshape(chir * chic, 1)
+    return AHLA.reshape(chir * chic)
 
 def buildLargeE(MPS):
     chir, chic, aux = MPS.shape
     AC = np.conjugate(MPS)
     AA = np.tensordot(MPS, AC, axes=([2,2]))
     AA = np.transpose(AA, (0, 2, 1, 3))
-    AA = np.reshape(AA, (chir * chic, chir * chic))
+    AA = np.reshape(AA, (chir * chir, chic * chic))
     #print "AA", AA.shape, "\n", AA
 
     return AA
@@ -68,8 +68,8 @@ def getLargestW(MPS, dir):
     linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
                                          matvec = linOpWrapped)
                                          #dtype = 'complex128')
-    omega, X = spspla.eigs(linOpForEigs, k=1, which='LR', tol=expS, 
-                           maxiter=maxIter)
+    omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = expS, 
+                           maxiter = maxIter)
     X = X.reshape(chir, chic)
 
     return omega, X
@@ -83,76 +83,47 @@ def fixPhase(X):
     return Y
 
 def symmNormalization(MPS, chir, chic):
-    """Returns a symmetric normalized MPS.
-
-    This is really tricky business!
-
-    AA = buildLargeE(MPS)
-    omega, RX = spspla.eigs(AA, k=1, which='LR', tol=expS, 
-                           maxiter=maxIter)
-    print "w(1) =", omega, "\nRX\n", RX.reshape(chir, chic)
-
-    AA = buildLargeE(MPS)
-    omega, LX = spspla.eigs(np.transpose(np.conjugate(AA)), k=1, 
-                            which='LR', tol=expS, maxiter=maxIter)
-    print "w(1) =", omega, "\nLX\n", LX.reshape(chir, chic)
-    """
     omega, R = getLargestW(MPS, 'R')
-    #R = fixPhase(R)
     print "wR", omega, "R\n", R
 
+    Rs = spla.sqrtm(R)
+    ARs = np.tensordot(MPS, Rs, axes=([1,0]))
+    Rsi = spla.inv(Rs)
+    A1 = np.tensordot(Rsi, ARs, axes=([1,0]))
+    A1 = np.transpose(A1, (0, 2, 1))
 
-    R = spla.sqrtm(R)
-    #R = fixPhase(R)
-    print "Rsqrt\n", R
-    A = np.tensordot(MPS, R, axes=([1,0]))
-    R = spla.inv(R)
-    print "Rinv\n", R
-    A = np.tensordot(R, A, axes=([1,0]))
-    nMPS = np.transpose(A, (0, 2, 1))
-
-
-    omega, L = getLargestW(nMPS, 'L')
-    #L = fixPhase(L)
+    omega, L = getLargestW(A1, 'L')
     print "wL", omega, "L\n", L
 
+    Lambda2, U = spla.eig(L)
+    A1U = np.tensordot(A1, U, axes=([1,0]))
+    Udag = np.transpose(np.conjugate(U))
+    A2 = np.tensordot(Udag, A1U, axes=([1,0]))
+    A2 = np.transpose(A2, (0, 2, 1))
+    print "Lambda**2", Lambda2#, "\n", U
 
-    eval, evec = spla.eig(L)
-    print "Lambda**2", eval, "\n", evec
-    A = np.tensordot(nMPS, evec, axes=([1,0]))
-    evec = np.transpose(np.conjugate(evec))
-    nMPS = np.tensordot(evec, A, axes=([1,0]))
-    nMPS = np.transpose(nMPS, (0, 2, 1))
+    Lambda = map(np.sqrt, Lambda2)
+    Lambdas = map(np.sqrt, Lambda)
+    Lambdasi = 1. / np.asarray(Lambdas)
+    A2Lsi = np.tensordot(A2, np.diag(Lambdasi), axes=([1,0]))
+    A3 = np.tensordot(np.diag(Lambdas), A2Lsi, axes=([1,0]))
+    A3 = np.transpose(A3, (0, 2, 1))
+    print "Lambda", Lambda
 
-
-    eval = map(np.sqrt, eval)
-    print "Lambda", np.diag(fixPhase(np.diag(eval)))#, type(eval)
-    eval = map(np.sqrt, eval)
-    A = np.tensordot(np.diag(eval), nMPS, axes=([1,0]))
-    eval = 1. / np.asarray(eval)
-    nMPS = np.tensordot(A, np.diag(eval), axes=([1,0]))
-    nMPS = np.transpose(nMPS, (0, 2, 1))
-
-
-    nMPS = nMPS / np.sqrt(omega)
-    #print "New MPS =", nMPS.shape, "\n", nMPS
+    nMPS = A3 / np.sqrt(omega)
+    RealLambda = fixPhase(np.diag(Lambda))
+    #print "nMPS", nMPS.shape, "\n", nMPS
+    print "RealLambda", RealLambda.shape, "\n", RealLambda
 
     ######### CHECKING RESULT #########
+    Trace = np.trace(np.dot(RealLambda, np.conjugate(RealLambda)))
+    ELambda = linearOpForR(nMPS, RealLambda)
+    ELambda = ELambda.reshape(chir, chic)
+    LambdaE = linearOpForL(nMPS, RealLambda)
+    LambdaE = LambdaE.reshape(chir, chic)
+    print "Trace(RealLambda)", Trace, "\n", ELambda, "\n", LambdaE
 
-    omega, L = getLargestW(nMPS, 'L')
-    L = fixPhase(L)
-    print "wL", omega, "L\n", L
-
-    omega, R = getLargestW(nMPS, 'R')
-    R = fixPhase(R)
-    print "wR", omega, "R\n", R
-
-    print "tr(RR+) =", np.trace(np.tensordot(np.transpose(
-                np.conjugate(R)), R, axes=([1,0]))), 
-    print "tr(LL+) =", np.trace(np.tensordot(np.transpose(
-                np.conjugate(L)), L, axes=([1,0])))
-
-    return np.diag(R), nMPS
+    return RealLambda, nMPS
 
 def buildLocalH():
     """Builds local hamiltonian (d x d)-matrix.
@@ -162,7 +133,7 @@ def buildLocalH():
     """
     localH = np.zeros((d, d, d, d))
     localH[0,0,0,0] = localH[1,1,1,1] = 1./4.
-    localH[0,1,0,1] = localH[1,0,1,0] = 1./4.
+    localH[0,1,0,1] = localH[1,0,1,0] = -1./4.
     localH[1,0,0,1] = localH[0,1,1,0] = 1./2.
 
     return localH
@@ -173,77 +144,69 @@ def buildHElements(MPS, H):
     Returns a tensor of the form C[a, b, s, t].
     """
     AA = np.tensordot(MPS, MPS, axes=([1,0]))
-    tmp = np.tensordot(H, AA, axes=([0,1], [1,3]))
+    tmp = np.tensordot(H, AA, axes=([2,3], [1,3]))
     C = np.transpose(tmp, (2, 3, 0, 1))
+    #print "C\n", C
 
     return C
 
-def getQHaaaaR(MPS, R, H, getE = False):
+def getQHaaaaR(MPS, Lambda, C):
     """Returns either the energy density or the RHS of eq. for |K).
     """
+    L = R = Lambda
     chir, chic, aux = MPS.shape
-    AA = np.tensordot(MPS, MPS, axes=([1,0]))
+    AA = np.tensordot(MPS, MPS, axes=([1,0])) #a,s,b,t
     AAH = np.transpose(np.conjugate(AA), (2, 1, 0, 3))
-    AAR = np.tensordot(AA, np.diag(R), axes=([2,0]))
-    AARAAH = np.tensordot(AAR, AAH, axes=([3,0]))
-    HAAAAR = np.tensordot(H, AARAAH, axes=([0,1,2,3], [3,5,1,2]))
+    CR = np.tensordot(C, R, axes=([1,0])) #a,s,t,b
 
-    L = np.transpose(np.diag(np.conjugate(R)), (1, 0))
+    HAR = np.tensordot(CR, AAH, axes=([1,2,3], [1,3,0]))
+    h = np.trace(np.tensordot(L, HAR, axes=([1,0])))
+    rhs = HAR - (h * R)
 
-    if(getE):
-        LHAAAAR = np.tensordot(L, HAAAAR, axes=([1,0]))
-        return np.trace(LHAAAAR)
-    else:
-        HAAAARL = np.tensordot(HAAAAR, L, axes=([1,0]))
-        RHAAAARL = np.tensordot(np.diag(R), HAAAARL, axes=([1,0]))
-        QHAAAAR = HAAAAR - RHAAAARL
-        print "HAAAAR", HAAAAR.shape, "HAAAARL", HAAAARL.shape,
-        print "RHAAAARL", RHAAAARL.shape, "QHAAAAR", QHAAAAR.shape
-        print "QHAAAAR\n", QHAAAAR
+    print "Energy density", h, "\nL", L.shape, "HAAAAR", HAR.shape,
+    print "rhs", rhs.shape, "rhs\n", rhs
 
-        return QHAAAAR.reshape(chir * chic, 1)
+    return rhs.reshape(chir * chic)
 
-def linearOpForK(MPS, R, K):
+def linearOpForK(MPS, Lambda, K):
     """Returns ...
 
     Instead of defining QEQ as the regularized operator, we could 
     define QEQ = E - S = Q - |r)(l|; therefore avoiding more matrix 
     multiplications. Is this true?
     """
+    L = R = Lambda
     chir, chic, aux = MPS.shape
     K = np.reshape(K, (chir, chic))
-    L = np.transpose(np.diag(np.conjugate(R)), (1, 0))
-    KL = np.tensordot(K, L, axes=([1,0]))
-    RKL = np.tensordot(np.diag(R), KL, axes=([1,0]))
-    EK = linearOpForR(MPS, K.reshape(chir * chic, 1))
-    EK = EK.reshape(chir, chic)
-    tmp = K - EK + RKL
-    #print "MPS", MPS.shape, "R", R.shape, "K", K.shape, 
-    #print "RKL", RKL.shape, "EK", EK.shape
+    EK = linearOpForR(MPS, K.reshape(chir * chic)).reshape(chir, chic)
+    trLK = np.trace(np.tensordot(L, K, axes=([1,0])))
 
-    return tmp.reshape(chir * chic, 1)
+    lhs = K - EK + (trLK * R)
+    #print "EK", EK.shape, "lhs", lhs.shape
 
-def calcHmeanval(MPS, R, H):
+    return lhs.reshape(chir * chic)
+
+def calcHmeanval(MPS, R, C):
     chir, chic, aux = MPS.shape
-    QHAAAAR = getQHaaaaR(MPS, R, H)
+    QHAAAAR = getQHaaaaR(MPS, R, C)
 
     linOpWrapped = functools.partial(linearOpForK, MPS, R)
     linOpForBicg = spspla.LinearOperator((chir * chir, chic * chic), 
                                          matvec = linOpWrapped, 
                                          dtype = 'complex128')
-    K, info = spspla.bicgstab(linOpForBicg, QHAAAAR, tol=expS, 
-                              maxiter=maxIter)
-    print "QHAAAAR", QHAAAAR.shape
+    K, info = spspla.bicgstab(linOpForBicg, QHAAAAR, tol = expS, 
+                              maxiter = maxIter)
     if(info != 0): print "\nWARNING: bicgstab failed!\n"; exit()
-    K = np.reshape(K, (chir, chic))
 
-    print "Energy density =", getQHaaaaR(MPS, R, H, True)
-    print "K\n", K
+    K = np.reshape(K, (chir, chic))
+    print "QHAAAAR", QHAAAAR.shape, "K\n", K
+
     return K
 
-def nullSpaceR(MPS, R):
-    RR = np.transpose(np.conjugate(MPS), (1, 0, 2))
-    RR = np.tensordot(np.diag(map(np.sqrt, R)), RR, axes=([1,0]))
+def nullSpaceR(MPS, Lambda):
+    R = np.diag(Lambda)
+    AH = np.transpose(np.conjugate(MPS), (1, 0, 2))
+    RR = np.tensordot(np.diag(map(np.sqrt, R)), AH, axes=([1,0]))
     chir, chic, aux = RR.shape
 
     RR = np.transpose(RR, (0, 2, 1))
@@ -261,7 +224,7 @@ def nullSpaceR(MPS, R):
 
     RR = np.conjugate(np.transpose(RR))
     Null = np.tensordot(RR, VRdag, axes=([1,0]))
-    Id = np.tensordot(np.transpose(VRdag), VRdag, axes=([1,0]))
+    Id = np.tensordot(np.conjugate(VRdag.T), VRdag, axes=([1,0]))
 
     tmp = np.conjugate(np.transpose(VRdag))
     lpr, lmz = tmp.shape
@@ -273,22 +236,23 @@ def nullSpaceR(MPS, R):
 
     return tmp
 
-def calcFs(MPS, C, R, K, VR):
+def calcFs(MPS, C, Lambda, K, VR):
     VRdag = np.transpose(np.conjugate(VR), (1, 0, 2))
-    Lsqrt = Rsqrt = np.diag(map(np.sqrt, R))
-    Lsqrti = Rsqrti = np.diag(map(np.sqrt, 1./R))
+    Ld = np.diag(Lambda)
+    Lsqrt = Rsqrt = np.diag(map(np.sqrt, Ld))
+    Lsqrti = Rsqrti = np.diag(map(np.sqrt, 1./Ld))
     A = np.transpose(np.conjugate(MPS), (1, 0, 2))
 
     RsiVRdag = np.tensordot(Rsqrti, VRdag, axes=([1,0]))
     ARsiVRdag = np.tensordot(A, RsiVRdag, axes=([1,0]))
-    RARsiVRdag = np.tensordot(np.diag(R), ARsiVRdag, axes=([1,0]))
+    RARsiVRdag = np.tensordot(Lambda, ARsiVRdag, axes=([1,0]))
     CRARsiVRdag = np.tensordot(C, RARsiVRdag, axes=([1,2,3], [0,3,1]))
     tmp1 = np.tensordot(Lsqrt, CRARsiVRdag, axes=([1,0]))
     #print tmp1
 
     RsVRdag = np.tensordot(Rsqrt, VRdag, axes=([1,0]))
     CRsVRdag = np.tensordot(C, RsVRdag, axes=([1,3], [0,2]))
-    LCRsVRdag = np.tensordot(np.diag(R), CRsVRdag, axes=([1,0]))
+    LCRsVRdag = np.tensordot(Lambda, CRsVRdag, axes=([1,0]))
     ALCRsVRdag = np.tensordot(A, LCRsVRdag, axes=([1,2], [0,1]))
     tmp2 = np.tensordot(Lsqrti, ALCRsVRdag, axes=([1,0]))
     #print tmp2
@@ -304,10 +268,10 @@ def calcFs(MPS, C, R, K, VR):
 
     return tmp
 
-def getUpdateB(R, x, VR):
-    Rsqrti = Lsqrti = np.diag(map(np.sqrt, 1./R))
-
+def getUpdateB(Lambda, x, VR):
+    Rsqrti = Lsqrti = np.diag(map(np.sqrt, 1./np.diag(Lambda)))
     row, col, aux = VR.shape
+
     if(row*col == 0):
         row, row = Lsqrti.shape
         tmp = np.zeros((row, col, aux))
@@ -317,7 +281,7 @@ def getUpdateB(R, x, VR):
         xVRRsi = np.tensordot(x, VRRsi, axes=([1,0]))
         tmp = np.tensordot(Lsqrti, xVRRsi, axes=([1,0]))
 
-    print Lsqrti.shape, x.shape, VR.shape, tmp.shape
+    #print Lsqrti.shape, x.shape, VR.shape, tmp.shape
     print "B\n", tmp
 
     return tmp
@@ -340,14 +304,15 @@ def doUpdateForA(MPS, B):
 """Main...
 """
 d = 2
-xi = 30
+xi = 20
 expS = 1e-12
 maxIter = 800
 dTau = 0.1
 
 xir = xic = xi
-theA = np.random.rand(xir, xic, d) - .5 + 1j * np.zeros((xir, xic, d))
-#print "theMPS\n", theA
+theMPS = np.random.rand(xir, xic, d) - .5 + 1j * np.zeros((xir, xic, d))
+theMPS = np.random.rand(xir, xic, d) - .5 + 1j * (np.random.rand(xir, xic, d) - .5)
+#print "theMPS\n", theMPS
 
 theH = buildLocalH()
 print "theH\n", theH.reshape(d*d, d*d)
@@ -356,24 +321,24 @@ I = 0
 while (I != maxIter):
     print "\t\t\t\t\t\t\t############# ITERATION", I, "#############"
 
-    theR, theA = symmNormalization(theA, xir, xic)
-    print "theR =", theR
+    theL, theMPS = symmNormalization(theMPS, xir, xic)
+    print "theMPS\n", theMPS, "\ntheL\n", theL
 
-    theC = buildHElements(theA, theH)
+    theC = buildHElements(theMPS, theH)
     print "theC =", theC.shape
 
-    theK = calcHmeanval(theA, theR, theH)
+    theK = calcHmeanval(theMPS, theL, theC)
     print "theK =", theK.shape
 
-    theVR = nullSpaceR(theA, theR)
+    theVR = nullSpaceR(theMPS, theL)
     print "theVR =", theVR.shape
 
-    theF = calcFs(theA, theC, theR, theK, theVR)
+    theF = calcFs(theMPS, theC, theL, theK, theVR)
     print "theF =", theF.shape
 
-    theB = getUpdateB(theR, theF, theVR)
+    theB = getUpdateB(theL, theF, theVR)
     print "theB =", theB.shape
 
-    theA = doUpdateForA(theA, theB)
+    theMPS = doUpdateForA(theMPS, theB)
 
     I += 1

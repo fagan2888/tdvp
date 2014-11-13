@@ -52,7 +52,7 @@ def buildLargeE(MPS):
     AC = np.conjugate(MPS)
     AA = np.tensordot(MPS, AC, axes=([2,2]))
     AA = np.transpose(AA, (0, 2, 1, 3))
-    AA = np.reshape(AA, (chir * chic, chir * chic))
+    AA = np.reshape(AA, (chir * chir, chic * chic))
     #print "AA", AA.shape, "\n", AA
 
     return AA
@@ -133,7 +133,7 @@ def buildLocalH():
     """
     localH = np.zeros((d, d, d, d))
     localH[0,0,0,0] = localH[1,1,1,1] = 1./4.
-    localH[0,1,0,1] = localH[1,0,1,0] = 1./4.
+    localH[0,1,0,1] = localH[1,0,1,0] = -1./4.
     localH[1,0,0,1] = localH[0,1,1,0] = 1./2.
 
     return localH
@@ -144,26 +144,26 @@ def buildHElements(MPS, H):
     Returns a tensor of the form C[a, b, s, t].
     """
     AA = np.tensordot(MPS, MPS, axes=([1,0]))
-    tmp = np.tensordot(H, AA, axes=([0,1], [1,3]))
+    tmp = np.tensordot(H, AA, axes=([2,3], [1,3]))
     C = np.transpose(tmp, (2, 3, 0, 1))
     #print "C\n", C
 
     return C
 
-def getQHaaaaR(MPS, Lambda, H):
+def getQHaaaaR(MPS, Lambda, C):
     """Returns either the energy density or the RHS of eq. for |K).
     """
     L = R = Lambda
     chir, chic, aux = MPS.shape
     AA = np.tensordot(MPS, MPS, axes=([1,0])) #a,s,b,t
-    AAR = np.tensordot(AA, R, axes=([2,0])) #a,s,t,b
     AAH = np.transpose(np.conjugate(AA), (2, 1, 0, 3))
-    AARAAH = np.tensordot(AAR, AAH, axes=([3,0]))
-    HAAAAR = np.tensordot(H, AARAAH, axes=([0,1,2,3], [1,2,3,5]))
-    h = np.trace(np.tensordot(L, HAAAAR, axes=([1,0])))
+    CR = np.tensordot(C, R, axes=([1,0])) #a,s,t,b
 
-    rhs = HAAAAR - (h * R)
-    print "Energy density", h, "\nL", L.shape, "HAAAAR", HAAAAR.shape,
+    HAR = np.tensordot(CR, AAH, axes=([1,2,3], [1,3,0]))
+    h = np.trace(np.tensordot(L, HAR, axes=([1,0])))
+    rhs = HAR - (h * R)
+
+    print "Energy density", h, "\nL", L.shape, "HAAAAR", HAR.shape,
     print "rhs", rhs.shape, "rhs\n", rhs
 
     return rhs.reshape(chir * chic)
@@ -178,23 +178,24 @@ def linearOpForK(MPS, Lambda, K):
     L = R = Lambda
     chir, chic, aux = MPS.shape
     K = np.reshape(K, (chir, chic))
-    trLK = np.trace(np.tensordot(L, K, axes=([1,0])))
     EK = linearOpForR(MPS, K.reshape(chir * chic)).reshape(chir, chic)
+    trLK = np.trace(np.tensordot(L, K, axes=([1,0])))
+
     lhs = K - EK + (trLK * R)
     #print "EK", EK.shape, "lhs", lhs.shape
 
     return lhs.reshape(chir * chic)
 
-def calcHmeanval(MPS, R, H):
+def calcHmeanval(MPS, R, C):
     chir, chic, aux = MPS.shape
-    QHAAAAR = getQHaaaaR(MPS, R, H)
+    QHAAAAR = getQHaaaaR(MPS, R, C)
 
     linOpWrapped = functools.partial(linearOpForK, MPS, R)
     linOpForBicg = spspla.LinearOperator((chir * chir, chic * chic), 
                                          matvec = linOpWrapped, 
                                          dtype = 'complex128')
-    K, info = spspla.bicgstab(linOpForBicg, QHAAAAR, tol=expS, 
-                              maxiter=maxIter)
+    K, info = spspla.bicgstab(linOpForBicg, QHAAAAR, tol = expS, 
+                              maxiter = maxIter)
     if(info != 0): print "\nWARNING: bicgstab failed!\n"; exit()
 
     K = np.reshape(K, (chir, chic))
@@ -303,7 +304,7 @@ def doUpdateForA(MPS, B):
 """Main...
 """
 d = 2
-xi = 3
+xi = 50
 expS = 1e-12
 maxIter = 800
 dTau = 0.1
@@ -317,7 +318,7 @@ theH = buildLocalH()
 print "theH\n", theH.reshape(d*d, d*d)
 
 I = 0
-while (I != 2):#maxIter):
+while (I != maxIter):
     print "\t\t\t\t\t\t\t############# ITERATION", I, "#############"
 
     theL, theMPS = symmNormalization(theMPS, xir, xic)
@@ -326,7 +327,7 @@ while (I != 2):#maxIter):
     theC = buildHElements(theMPS, theH)
     print "theC =", theC.shape
 
-    theK = calcHmeanval(theMPS, theL, theH)
+    theK = calcHmeanval(theMPS, theL, theC)
     print "theK =", theK.shape
 
     theVR = nullSpaceR(theMPS, theL)
