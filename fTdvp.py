@@ -150,7 +150,7 @@ def calcLs(MPS):
     """Calculates the list of L matrices.
 
     Association of matrix multiplication different as in calcRs.
-    SYMMETRIZATION OF L(n) BY HAND.
+    SYMMETRIZATION OF L(n) BY HAND (UNNECESSARY)
     """
     L = []#np.ones((1,1))]
 
@@ -176,7 +176,7 @@ def calcRs(MPS):
 
     Appends the R's as in calcLs and then reverses the list.
     The multiplication of the matrices is associated differently.
-    SYMMETRIZATION OF R(n) BY HAND.
+    SYMMETRIZATION OF R(n) BY HAND (SAME THING HERE).
     """
     R = []#np.ones((1,1))]
 
@@ -406,7 +406,7 @@ while (I != maxIter):
     print "theK =", theK
 
     theVR = nullSpaceR(theMPS)
-    print "theVR =", map(np.shape, theVR)#, theVR
+    print "theVR =", map(np.shape, theVR)
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
     print "theF =", map(np.shape, theF)
@@ -417,61 +417,3 @@ while (I != maxIter):
     doUpdateForA(theMPS, theB)
 
     I += 1
-
-exit()
-
-"""
-del R
-print R
-
-exit()
-
-A = np.random.rand(chi*d*chi)
-#A = A.astype(complex)
-A = A.reshape((chi * d, chi))
-
-Q, R = linalg.qr(A, mode='economic')
-
-zrows = np.zeros((chi*d-chi, chi))
-R = np.vstack((R, zrows))
-
-print "A =", A#.shape
-print "Q =", Q#.shape
-print "R =", R#.shape
-
-B = np.random.rand(chi*d*chi)
-#B = A.astype(complex)
-B = B.reshape((chi * d, chi))
-
-print "B =",B
-
-B = R * B
-
-Q2, R2 = linalg.qr(B, mode='economic')
-
-R2 = np.vstack((R2, zrows))
-
-print "B =", B#.shape
-print "Q2 =", Q2#.shape
-print "R2 =", R2#.shape
-
-C = np.random.rand(chi*d*chi)
-#B = A.astype(complex)
-C = C.reshape((chi * d, chi))
-
-print "C =",C
-
-C = R2 * C
-
-Q3, R3 = linalg.qr(C, mode='economic')
-
-R3 = np.vstack((R3, zrows))
-
-print "C =", C#.shape
-print "Q3 =", Q3#.shape
-print "R3 =", R3#.shape
-
-exit()
-
-A = Q.copy()
-"""

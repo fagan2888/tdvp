@@ -155,9 +155,9 @@ def getQHaaaaR(MPS, Lambda, C):
     """
     L = R = Lambda
     chir, chic, aux = MPS.shape
-    AA = np.tensordot(MPS, MPS, axes=([1,0])) #a,s,b,t
+    AA = np.tensordot(MPS, MPS, axes=([1,0]))
     AAH = np.transpose(np.conjugate(AA), (2, 1, 0, 3))
-    CR = np.tensordot(C, R, axes=([1,0])) #a,s,t,b
+    CR = np.tensordot(C, R, axes=([1,0]))
 
     HAR = np.tensordot(CR, AAH, axes=([1,2,3], [1,3,0]))
     h = np.trace(np.tensordot(L, HAR, axes=([1,0])))
@@ -291,7 +291,7 @@ def doUpdateForA(MPS, B):
     It does the actual update to the MPS state for given time step.
 
     The update is done according to the formula:
-    A[n, t + dTau] = A[n, t] - dTau * B[x*](n),
+    A(t + dTau) = A(t) - dTau * B(x*),
     where dTau is the corresponding time step.
     """
     nMPS = MPS - dTau * B
@@ -311,7 +311,7 @@ dTau = 0.1
 
 xir = xic = xi
 theMPS = np.random.rand(xir, xic, d) - .5 + 1j * np.zeros((xir, xic, d))
-theMPS = np.random.rand(xir, xic, d) - .5 + 1j * (np.random.rand(xir, xic, d) - .5)
+#theMPS = np.random.rand(xir, xic, d) - .5 + 1j * (np.random.rand(xir, xic, d) - .5)
 #print "theMPS\n", theMPS
 
 theH = buildLocalH()
