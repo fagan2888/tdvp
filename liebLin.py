@@ -16,68 +16,38 @@ def supOp(A, B, way, X):
     else:
         return adj(B).dot(X).dot(A)
 
-def linOpForSys(Q, R, way, X):
-    chi = Q.shape
+def linOpForT(Q_, R_, way, X):
+    chi, chi = Q_.shape
     X = X.reshape(chi, chi)
     Id = np.eye(chi, chi)
 
-    XTX = SupOp(Q, Id, way, X) + SupOp(Id, Q, way, X) + SupOp(R, R, way, X)
+    XTX = supOp(Q_, Id, way, X) + supOp(Id, Q_, way, X) + supOp(R_, R_, way, X)
+
     return XTX.reshape(chi * chi)
 
-def linearOpForR(q, r, f):
-    chi, chi = r.shape
-    f = f.reshape(chi, chi)
-    fRdag = np.tensordot(f, np.conjugate(r.T), axes=([1,0]))
+def getLargestW(Q_, R_, way):
+    """Returns density matrix by diagonalizing.
 
-    tmp1 = np.tensordot(q, f, axes=([1,0]))
-    tmp2 = np.tensordot(f, np.conjugate(q.T), axes=([1,0]))
-    tmp3 = np.tensordot(r, fRdag, axes=([1,0]))
+    Should it be SR or SM?
+    """
+    chi, chi = Q_.shape
 
-    Tf = tmp1 + tmp2 + tmp3
-    return Tf.reshape(chi * chi)
-
-def linearOpForL(q, r, f):
-    chi, chi = q.shape
-    f = f.reshape(chi, chi)
-    RdagF = np.tensordot(np.conjugate(r.T), f, axes=([1,0]))
-
-    tmp1 = np.tensordot(f, q, axes=([1,0]))
-    tmp2 = np.tensordot(np.conjugate(q.T), f, axes=([1,0]))
-    tmp3 = np.tensordot(RdagF, r, axes=([1,0]))
-
-    fT = tmp1 + tmp2 + tmp3
-    return fT.reshape(chi * chi)
-
-def getLargestW(q, r, way):
-    chi, chi = q.shape
-
-    if(way == 'R'):
-        linOpWrapped = functools.partial(linearOpForR, q, r)
-    else:
-        linOpWrapped = functools.partial(linearOpForL, q, r)
-
+    linOpWrap = functools.partial(linOpForT, Q_, R_, way)
     linOpForEigs = spspla.LinearOperator((chi * chi, chi * chi), 
-                                         matvec = linOpWrapped, 
-                                         dtype = 'float64')
-    omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = expS, 
+                                         matvec = linOpWrap, dtype = 'float64')
+    omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'SR', tol = expS, 
                            maxiter = maxIter)
     X = X.reshape(chi, chi)
 
     return omega, X
 
-def solveLinSys(q, r, way):
-    chi, chi = q.shape
+def solveLinSys(Q_, R_, way):
+    chi, chi = Q_.shape
 
-    if(way == 'R'):
-        linOpWrapped = functools.partial(linearOpForR, q, r)
-    else:
-        linOpWrapped = functools.partial(linearOpForL, q, r)
-
+    linOpWrap = functools.partial(linOpForT, Q_, R_, way)
     linOpForSol = spspla.LinearOperator((chi * chi, chi * chi), 
-                                        matvec = linOpWrapped, 
-                                        dtype = 'float64')
+                                        matvec = linOpWrap, dtype = 'float64')
     guess = np.random.rand(chi * chi) - .5
-
     S, info = spspla.bicgstab(linOpForSol, np.zeros(chi * chi), tol = expS, 
                               x0 = guess, maxiter = maxIter)
     if(info != 0): print "\nWARNING: bicgstab failed!\n"; exit()
@@ -87,57 +57,57 @@ def solveLinSys(q, r, way):
 
 def fixPhase(X):
     Y = X / np.trace(X)
-    norm = np.tensordot(np.transpose(np.conjugate(Y)), Y, axes=([1,0]))
-    norm = np.sqrt(np.trace(norm))
+    norm = 1.0 #np.sqrt(np.trace(adj(Y).dot(Y)))
     Y = Y / norm
 
     return Y
 
-def leftNormalization(chi):
-    K = np.random.rand(chi, chi) -.5 #+ 1j * np.zeros((chi, chi))
-    K = .5 * (K - adj(K))
-    R = np.random.rand(chi, chi) -.5 #+ 1j * np.zeros((chi, chi))
+def leftNormalization(K_, R_):
+    chi, chi = K_.shape
+    Q_ = - K_ - .5 * (adj(R_).dot(R_))
+    print "K\n", K_, "\nR\n", R_, "\nQ\n", Q_
 
-    Q = - K - .5 * (adj(R).dot(R))
-    print "K\n", K, "\nR\n", R, "\nQ\n", Q
+    #w, l_ = getLargestW(Q_, R_, 'L')
+    l_ = solveLinSys(Q_, R_, 'L')
+    r_ = solveLinSys(Q_, R_, 'R')
+    l_ = fixPhase(l_)
+    r_ = fixPhase(r_)
+    fac = np.trace(l_) / chi
+    print "l", np.trace(l_), "\n", l_/fac
+    print "r", np.trace(r_), "\n", r_
 
-    l = solveLinSys(Q, R, 'L')
-    r = solveLinSys(Q, R, 'R')
-    fac = np.trace(l) / chi
-    print "L", np.trace(l), "\n", l/fac
-    print "R", np.trace(r), "\n", r
+    return Q_, r_
 
-    eval, evec = spla.eig(r)
-    print "lambda", eval
+def rightNormalization(K_, R_):
+    chi, chi = K_.shape
+    Q_ = - K_ - .5 * (R_.dot(adj(R_)))
+    print "K\n", K_, "\nR\n", R_, "\nQ\n", Q_
 
-def rightNormalization(chi):
-    K = np.random.rand(chi, chi) -.5 #+ 1j * np.zeros((chi, chi))
-    K = 0.5 * (K - np.conjugate(K.T))
+    l_ = solveLinSys(Q_, R_, 'L')
+    r_ = solveLinSys(Q_, R_, 'R')
+    l_ = fixPhase(l_)
+    r_ = fixPhase(r_)
+    fac = np.trace(r_) / chi
+    print "l", np.trace(l_), "\n", l_
+    print "r", np.trace(r_), "\n", r_/fac
 
-    R = np.random.rand(chi, chi) -.5 #+ 1j * np.zeros((chi, chi))
-    Rdag = np.conjugate(R.T)
-
-    Q = - K - .5 * (np.tensordot(R, Rdag, axes=([1,0])))
-    print "K\n", K, "\nR\n", R, "\nQ\n", Q
-
-    l = solveLinSys(Q, R, 'L')
-    r = solveLinSys(Q, R, 'R')
-    fac = np.trace(r) / chi
-    print "L", np.trace(l), "\n", l
-    print "R", np.trace(r), "\n", r/fac
-
-    eval, evec = spla.eig(l)
-    print "lambda", eval
+    return Q_, l_
 
 
 """
 Main...
 """
-xi = 3
-expS = 1.e-10
-maxIter = 500
-
 np.random.seed(0)
 
-leftNormalization(xi)
-rightNormalization(xi)
+xi = 6
+expS = 1.e-10
+maxIter = 900
+K = np.random.rand(xi, xi) -.5 #+ 1j * np.zeros((xi, xi))
+K = .5 * (K - adj(K))
+R = np.random.rand(xi, xi) -.5 #+ 1j * np.zeros((xi, xi))
+
+Q, r = leftNormalization(K, R)
+Q, l = rightNormalization(K, R)
+
+eval, evec = spla.eig(r)
+print "lambda", reduce(lambda x,y: x+y, eval), eval.real
