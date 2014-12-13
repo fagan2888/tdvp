@@ -93,6 +93,32 @@ def rightNormalization(K_, R_):
 
     return Q_, l_
 
+def getQrhsQ(Q_, R_, way, rho):
+    chi, chi = Q_.shape
+    commQR = comm(Q_, R_)
+    RR = R_.dot(R_)
+    Id = np.eye(chi, chi)
+
+    kinE = 1./(2. * m) * supOp(commQR, commQR, way, Id)
+    potE = v * supOp(R_, R_, way, Id)
+    intE = w * supOp(RR, RR, way, Id)
+    ham = kinE + potE + intE
+
+    energy = np.trace(ham.dot(rho))
+    rhs = ham - (energy * Id)
+    print "Energy density", energy
+
+    return rhs.reshape(chi * chi)
+
+def linOpForF(Q_, R_, way, rho, X):
+    chi, chi = Q_.shape
+    X = X.reshape(chi, chi)
+    Id = np.eye(chi, chi)
+
+    FTF = linOpForT(Q_, R_, way, X) - (np.trace(X.dot(rho)) * Id)
+
+    return FTF.reshape(chi * chi)
+
 
 """
 Main...
