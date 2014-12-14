@@ -115,9 +115,24 @@ def linOpForF(Q_, R_, way, rho, X):
     X = X.reshape(chi, chi)
     Id = np.eye(chi, chi)
 
-    FTF = linOpForT(Q_, R_, way, X) - (np.trace(X.dot(rho)) * Id)
+    FTF = linOpForT(Q_, R_, way, X).reshape(chi, chi) - (np.trace(X.dot(rho)) * Id)
 
     return FTF.reshape(chi * chi)
+
+def calcF(Q_, R_, way, rho):
+    chi, chi = Q_.shape
+    rhs = getQrhsQ(Q_, R_, way, rho)
+
+    linOpWrap = functools.partial(linOpForF, Q_, R_, way, rho)
+    linOpForSol = spspla.LinearOperator((chi * chi, chi * chi), 
+                                        matvec = linOpWrap, dtype = 'float64')
+    guess = np.random.rand(chi * chi) - .5
+    F, info = spspla.bicgstab(linOpForSol, rhs, tol = expS, 
+                              x0 = guess, maxiter = maxIter)
+    if(info != 0): print "\nWARNING: bicgstab failed!\n"; exit()
+    F = F.reshape(chi, chi)
+
+    return F
 
 
 """
@@ -132,8 +147,12 @@ K = np.random.rand(xi, xi) -.5 #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
 R = np.random.rand(xi, xi) -.5 #+ 1j * np.zeros((xi, xi))
 
+m, v, w = .5, 1., 2.
+
 Q, r = leftNormalization(K, R)
-Q, l = rightNormalization(K, R)
+#Q, l = rightNormalization(K, R)
 
 eval, evec = spla.eig(r)
 print "lambda", reduce(lambda x,y: x+y, eval), eval.real
+
+calcF(Q, R, 'L', r)
