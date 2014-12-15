@@ -62,7 +62,7 @@ def fixPhase(X):
 
 def leftNormalization(K_, R_):
     chi, chi = K_.shape
-    Q_ = - K_ - .5 * (adj(R_).dot(R_))
+    Q_ = K_ - .5 * (adj(R_).dot(R_))
     print "K\n", K_, "\nR\n", R_, "\nQ\n", Q_
 
     #w, l_ = getLargestW(Q_, R_, 'L')
@@ -78,7 +78,7 @@ def leftNormalization(K_, R_):
 
 def rightNormalization(K_, R_):
     chi, chi = K_.shape
-    Q_ = - K_ - .5 * (R_.dot(adj(R_)))
+    Q_ = K_ - .5 * (R_.dot(adj(R_)))
     print "K\n", K_, "\nR\n", R_, "\nQ\n", Q_
 
     l_ = solveLinSys(Q_, R_, 'L')
@@ -165,8 +165,16 @@ def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_):
     iContrib = w * (partOne + partTwo)
 
     Ystar_ = fContrib + kContrib + pContrib + iContrib
+    print "Ystar\n", Ystar_
 
     return Ystar_
+
+def getUpdateVandW(R_, rhoSrI_, Ystar_):
+    Vstar_ = - adj(R_).dot(Ystar_).dot(rhoSrI_)
+    Wstar_ = Ystar_.dot(rhoSrI_)
+    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_
+
+    return Vstar_, Wstar_
 
 
 """
@@ -191,3 +199,5 @@ rhoI, rhoSr, rhoSrI = rhoVersions(rho)
 F = calcF(Q, R, 'L', rho)
 
 Ystar = calcYstar(Q, R, F, rho, rhoI, rhoSr, rhoSrI)
+
+Vstar, Wstar = getUpdateVandW(R, rhoSrI, Ystar)
