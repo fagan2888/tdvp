@@ -148,6 +148,26 @@ def rhoVersions(rho_):
 
     return rhoI_, rhoSr_, rhoSrI_
 
+def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_):
+    fContrib = - R_.dot(F_).dot(rhoSr_) + F_.dot(R_).dot(rhoSr_)
+
+    common = comm(Q_, R_).dot(rho_)
+    partOne = comm(adj(Q_), common).dot(rhoSrI_)
+    partTwo = R_.dot(comm(common, adj(R_))).dot(rhoSrI_)
+
+    kContrib = (partOne - partTwo) / (2. * m)
+    pContrib = v * (R_.dot(rhoSr))
+
+    RR = R_.dot(R_)
+    partOne = RR.dot(rho_).dot(adj(R_)).dot(rhoSrI_)
+    partTwo = adj(R_).dot(RR).dot(rhoSr_)
+
+    iContrib = w * (partOne + partTwo)
+
+    Ystar_ = fContrib + kContrib + pContrib + iContrib
+
+    return Ystar_
+
 
 """
 Main...
@@ -170,3 +190,4 @@ rhoI, rhoSr, rhoSrI = rhoVersions(rho)
 
 F = calcF(Q, R, 'L', rho)
 
+Ystar = calcYstar(Q, R, F, rho, rhoI, rhoSr, rhoSrI)
