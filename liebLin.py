@@ -142,9 +142,9 @@ def rhoVersions(rho_):
     evalSrI = 1. / np.asarray(evalSr)
     print "evalI  ", evalI, "\nevalSr ", evalSr, "\nevalSrI", evalSrI
 
-    rhoI_ = adj(evec_).dot(np.diag(evalI)).dot(evec_)
+    rhoI_ = evec_.dot(np.diag(evalI)).dot(adj(evec_))
     rhoSr_ = evec_.dot(np.diag(evalSr)).dot(adj(evec_))
-    rhoSrI_ = adj(evec_).dot(np.diag(evalSrI)).dot(evec_)
+    rhoSrI_ = evec_.dot(np.diag(evalSrI)).dot(adj(evec_))
 
     return rhoI_, rhoSr_, rhoSrI_
 
