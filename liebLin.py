@@ -176,6 +176,17 @@ def getUpdateVandW(R_, rhoSrI_, Ystar_):
 
     return Vstar_, Wstar_
 
+def doUpdateQandR(K_, R_, Wstar_):
+    tmp = adj(R_).dot(Wstar_) - adj(Wstar_).dot(R_)
+
+    R__ = R_ - dTau * Wstar_
+    K__ = K_ + .5 * dTau * tmp
+    #Q__ = K__ - .5 * (adj(R__).dot(R__))
+    #print "K\n", K__, "\nR\n", R__, "\nQ\n", Q__
+
+    return K__, R__
+
+
 
 """
 Main...
@@ -185,19 +196,26 @@ np.random.seed(0)
 xi = 6
 expS = 1.e-10
 maxIter = 900
+dTau = 0.1
 K = np.random.rand(xi, xi) -.5 #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
 R = np.random.rand(xi, xi) -.5 #+ 1j * np.zeros((xi, xi))
 
 m, v, w = .5, 1., 2.
 
-Q, rho = leftNormalization(K, R)
-#Q, rho = rightNormalization(K, R)
+I = 0
+while (I != 10):
+    Q, rho = leftNormalization(K, R)
+    #Q, rho = rightNormalization(K, R)
 
-rhoI, rhoSr, rhoSrI = rhoVersions(rho)
+    rhoI, rhoSr, rhoSrI = rhoVersions(rho)
 
-F = calcF(Q, R, 'L', rho)
+    F = calcF(Q, R, 'L', rho)
 
-Ystar = calcYstar(Q, R, F, rho, rhoI, rhoSr, rhoSrI)
+    Ystar = calcYstar(Q, R, F, rho, rhoI, rhoSr, rhoSrI)
 
-Vstar, Wstar = getUpdateVandW(R, rhoSrI, Ystar)
+    Vstar, Wstar = getUpdateVandW(R, rhoSrI, Ystar)
+
+    K, R = doUpdateQandR(K, R, Wstar)
+
+    I += 1
