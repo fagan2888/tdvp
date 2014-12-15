@@ -37,9 +37,8 @@ def getLargestW(Q_, R_, way):
                                          matvec = linOpWrap, dtype = 'float64')
     omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'SR', tol = expS, 
                            maxiter = maxIter)
-    X = X.reshape(chi, chi)
 
-    return omega, X
+    return omega, X.reshape(chi, chi)
 
 def solveLinSys(Q_, R_, way):
     chi, chi = Q_.shape
@@ -51,9 +50,8 @@ def solveLinSys(Q_, R_, way):
     S, info = spspla.bicgstab(linOpForSol, np.zeros(chi * chi), tol = expS, 
                               x0 = guess, maxiter = maxIter)
     if(info != 0): print "\nWARNING: bicgstab failed!\n"; exit()
-    S = S.reshape(chi, chi)
 
-    return S
+    return S.reshape(chi, chi)
 
 def fixPhase(X):
     Y = X / np.trace(X)
@@ -93,7 +91,7 @@ def rightNormalization(K_, R_):
 
     return Q_, l_
 
-def getQrhsQ(Q_, R_, way, rho):
+def getQrhsQ(Q_, R_, way, rho_):
     chi, chi = Q_.shape
     commQR = comm(Q_, R_)
     RR = R_.dot(R_)
@@ -104,35 +102,51 @@ def getQrhsQ(Q_, R_, way, rho):
     intE = w * supOp(RR, RR, way, Id)
     ham = kinE + potE + intE
 
-    energy = np.trace(ham.dot(rho))
+    energy = np.trace(ham.dot(rho_))
     rhs = ham - (energy * Id)
     print "Energy density", energy
 
     return rhs.reshape(chi * chi)
 
-def linOpForF(Q_, R_, way, rho, X):
+def linOpForF(Q_, R_, way, rho_, X):
     chi, chi = Q_.shape
     X = X.reshape(chi, chi)
     Id = np.eye(chi, chi)
+    shift = np.trace(X.dot(rho_))
 
-    FTF = linOpForT(Q_, R_, way, X).reshape(chi, chi) - (np.trace(X.dot(rho)) * Id)
+    FTF = linOpForT(Q_, R_, way, X).reshape(chi, chi) - (shift * Id)
 
     return FTF.reshape(chi * chi)
 
-def calcF(Q_, R_, way, rho):
+def calcF(Q_, R_, way, rho_):
     chi, chi = Q_.shape
-    rhs = getQrhsQ(Q_, R_, way, rho)
+    rhs = - getQrhsQ(Q_, R_, way, rho_)
 
-    linOpWrap = functools.partial(linOpForF, Q_, R_, way, rho)
+    linOpWrap = functools.partial(linOpForF, Q_, R_, way, rho_)
     linOpForSol = spspla.LinearOperator((chi * chi, chi * chi), 
                                         matvec = linOpWrap, dtype = 'float64')
     guess = np.random.rand(chi * chi) - .5
     F, info = spspla.bicgstab(linOpForSol, rhs, tol = expS, 
                               x0 = guess, maxiter = maxIter)
     if(info != 0): print "\nWARNING: bicgstab failed!\n"; exit()
-    F = F.reshape(chi, chi)
 
-    return F
+    return F.reshape(chi, chi)
+
+def rhoVersions(rho_):
+    eval_, evec_ = spla.eig(rho_)
+    print "lambda", reduce(lambda x, y: x+y, eval_), eval_.real
+
+    eval_ = eval_.real
+    evalI = 1. / eval_
+    evalSr = map(np.sqrt, eval_)
+    evalSrI = 1. / np.asarray(evalSr)
+    print "evalI  ", evalI, "\nevalSr ", evalSr, "\nevalSrI", evalSrI
+
+    rhoI_ = adj(evec_).dot(np.diag(evalI)).dot(evec_)
+    rhoSr_ = evec_.dot(np.diag(evalSr)).dot(adj(evec_))
+    rhoSrI_ = adj(evec_).dot(np.diag(evalSrI)).dot(evec_)
+
+    return rhoI_, rhoSr_, rhoSrI_
 
 
 """
@@ -149,10 +163,10 @@ R = np.random.rand(xi, xi) -.5 #+ 1j * np.zeros((xi, xi))
 
 m, v, w = .5, 1., 2.
 
-Q, r = leftNormalization(K, R)
-#Q, l = rightNormalization(K, R)
+Q, rho = leftNormalization(K, R)
+#Q, rho = rightNormalization(K, R)
 
-eval, evec = spla.eig(r)
-print "lambda", reduce(lambda x,y: x+y, eval), eval.real
+rhoI, rhoSr, rhoSrI = rhoVersions(rho)
 
-calcF(Q, R, 'L', r)
+F = calcF(Q, R, 'L', rho)
+
