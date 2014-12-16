@@ -49,7 +49,7 @@ def solveLinSys(Q_, R_, way):
     guess = np.random.rand(chi * chi) - .5
     S, info = spspla.bicgstab(linOpForSol, np.zeros(chi * chi), tol = expS, 
                               x0 = guess, maxiter = maxIter)
-    if(info != 0): print "\nWARNING: bicgstab failed!\n"; exit()
+    if(info != 0): print "\nWARNING: bicgstab failed!", info, way, "\n"; exit()
 
     return S.reshape(chi, chi)
 
@@ -128,7 +128,7 @@ def calcF(Q_, R_, way, rho_):
     guess = np.random.rand(chi * chi) - .5
     F, info = spspla.bicgstab(linOpForSol, rhs, tol = expS, 
                               x0 = guess, maxiter = maxIter)
-    if(info != 0): print "\nWARNING: bicgstab failed!\n"; exit()
+    if(info != 0): print "\nWARNING: bicgstab failed!", info, way, "\n"; exit()
 
     return F.reshape(chi, chi)
 
@@ -186,25 +186,40 @@ def doUpdateQandR(K_, R_, Wstar_):
 
     return K__, R__
 
+def calcQuantities(Q_, R_, rho_, way):
+    tmp = comm(Q_, R_)
+    RR = R_.dot(R_)
+    #if(way == 'L'): way = 'R' else: way = 'L'
+    way = 'R' if way == 'L' else 'L'
+
+    density = np.trace(R_.dot(rho_).dot(adj(R_)))
+    eFixedN = np.trace(tmp.dot(rho_).dot(adj(tmp)) / (2. * m) + w * RR.dot(rho_).dot(adj(RR)))
+    print "<n>", density, "e", eFixedN, 
+
+    density = np.trace(supOp(R_, R_, way, rho_))
+    eFixedN = np.trace(supOp(tmp, tmp, way, rho_) / (2. * m) + w * supOp(RR, RR, way, rho_))
+    print "<n>", density, "e", eFixedN
+
 
 
 """
 Main...
 """
-np.random.seed(0)
 
-xi = 6
-expS = 1.e-10
-maxIter = 900
-dTau = 0.1
-K = np.random.rand(xi, xi) -.5 #+ 1j * np.zeros((xi, xi))
+xi = 40
+expS = 1.e-6
+maxIter = 190000
+dTau = .01
+K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
-R = np.random.rand(xi, xi) -.5 #+ 1j * np.zeros((xi, xi))
+R = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 
-m, v, w = .5, 1., 2.
+m, v, w = .5, -.5, 2.
 
 I = 0
-while (I != 10):
+while (I != maxIter):
+    print "\t\t\t\t\t\t\t############# ITERATION", I, "#############"
+
     Q, rho = leftNormalization(K, R)
     #Q, rho = rightNormalization(K, R)
 
@@ -215,6 +230,8 @@ while (I != 10):
     Ystar = calcYstar(Q, R, F, rho, rhoI, rhoSr, rhoSrI)
 
     Vstar, Wstar = getUpdateVandW(R, rhoSrI, Ystar)
+
+    calcQuantities(Q, R, rho, 'L')
 
     K, R = doUpdateQandR(K, R, Wstar)
 
