@@ -25,7 +25,7 @@ def linOpForT(Q_, R_, way, X):
 
     return XTX.reshape(chi * chi)
 
-def getLargestW(Q_, R_, way):
+def getLargestW(Q_, R_, way, myWhich = 'SR', myGuess = None):
     """Returns density matrix by diagonalizing.
 
     Should it be SR or SM?
@@ -35,23 +35,50 @@ def getLargestW(Q_, R_, way):
     linOpWrap = functools.partial(linOpForT, Q_, R_, way)
     linOpForEigs = spspla.LinearOperator((chi * chi, chi * chi), 
                                          matvec = linOpWrap, dtype = 'float64')
-    omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'SR', tol = expS, 
-                           maxiter = maxIter)
+    omega, X = spspla.eigs(linOpForEigs, k = 1, which = myWhich, tol = expS, 
+                           maxiter = maxIter, v0 = myGuess)
 
     return omega, X.reshape(chi, chi)
 
-def solveLinSys(Q_, R_, way):
+def solveLinSys(Q_, R_, way, myGuess = None, method):
     chi, chi = Q_.shape
 
     linOpWrap = functools.partial(linOpForT, Q_, R_, way)
     linOpForSol = spspla.LinearOperator((chi * chi, chi * chi), 
                                         matvec = linOpWrap, dtype = 'float64')
-    guess = np.random.rand(chi * chi) - .5
-    S, info = spspla.bicgstab(linOpForSol, np.zeros(chi * chi), tol = expS, 
-                              x0 = guess, maxiter = maxIter)
-    if(info != 0): print "\nWARNING: bicgstab failed!", info, way, "\n"; exit()
+    if(method == 'bicgstab'):
+        S, info = spspla.bicgstab(linOpForSol, np.zeros(chi * chi), tol = expS, 
+                                  x0 = myGuess, maxiter = maxIter)
+    else:#if(method == 'gmres'):
+        S, info = spspla.gmres(linOpForSol, np.zeros(chi * chi), tol = expS, 
+                                  x0 = myGuess, maxiter = maxIter)
 
-    return S.reshape(chi, chi)
+    return info, S.reshape(chi, chi)
+
+def tryGetBestSol(Q_, R_, way, guess = None):
+    chi, chi = Q_.shape
+    if(guess != None): guess = np.random.rand(chi * chi) - .5
+    guess = guess.reshape(chi * chi)
+
+    try:
+        joke, sol = solveLinSys(Q_, R_, way, guess, 'bicgstab')
+    except (ArpackError, ArpackNoConvergence):
+        print "solveLinSys failed, trying getLargestW\n"
+        sol = sol.reshape(chi * chi) if joke > 0 else guess
+
+        try:
+            joke, sol = solveLinSys(Q_, R_, way, guess, 'gmres')
+        except (ArpackError, ArpackNoConvergence):
+            print "getLargestW failed; restarting\n"
+            sol = sol.reshape(chi * chi)
+
+            try:
+                joke, sol = getLargestW(Q_, R_, way, guess)
+            except (ArpackError, ArpackNoConvergence):
+                print "Continuing with lame solution\n"
+                sol = 0.5 * (sol + guess)
+
+    return sol
 
 def fixPhase(X):
     Y = X / np.trace(X)
@@ -60,19 +87,22 @@ def fixPhase(X):
 
     return Y
 
-def leftNormalization(K_, R_):
+def leftNormalization(K_, R_, guess):
     chi, chi = K_.shape
     Q_ = K_ - .5 * (adj(R_).dot(R_))
     print "K\n", K_, "\nR\n", R_, "\nQ\n", Q_
 
-    #w, l_ = getLargestW(Q_, R_, 'L')
-    l_ = solveLinSys(Q_, R_, 'L')
-    r_ = solveLinSys(Q_, R_, 'R')
+    l_ = tryGetBestSol(Q_, R_, 'L', guess)
+    r_ = tryGetBestSol(Q_, R_, 'R', guess)
     l_ = fixPhase(l_)
     r_ = fixPhase(r_)
     fac = np.trace(l_) / chi
     print "l", np.trace(l_), "\n", l_/fac
     print "r", np.trace(r_), "\n", r_
+
+    RR = R_.dot(R_)
+    Rd = adj(R_)
+    print "(R^+)^2 - (R^2)^+\n", Rd.dot(Rd) - adj(RR)
 
     return Q_, r_
 
@@ -90,6 +120,27 @@ def rightNormalization(K_, R_):
     print "r", np.trace(r_), "\n", r_/fac
 
     return Q_, l_
+
+def rhoVersions(rho_):
+    eval_, evec_ = spla.eig(rho_)
+    print "lambda", reduce(lambda x, y: x+y, eval_), eval_.real
+
+    eval_ = eval_.real
+    evalI = 1. / eval_
+    evalSr = map(np.sqrt, eval_)
+    evalSrI = 1. / np.asarray(evalSr)
+    print "evalI  ", evalI, "\nevalSr ", evalSr, "\nevalSrI", evalSrI
+
+    ULUd = evec_.dot(np.diag(eval_)).dot(adj(evec_))
+    print "r - UdU+\n", rho_-ULUd
+
+    rhoI_ = evec_.dot(np.diag(evalI)).dot(adj(evec_))
+    rhoSr_ = evec_.dot(np.diag(evalSr)).dot(adj(evec_))
+    rhoSrI_ = evec_.dot(np.diag(evalSrI)).dot(adj(evec_))
+    print "rr^-1\n", rho_.dot(rhoI_)
+    print "rSrrSr^-1\n", rhoSr_.dot(rhoSrI_)
+
+    return rhoI_, rhoSr_, rhoSrI_
 
 def getQrhsQ(Q_, R_, way, rho_):
     chi, chi = Q_.shape
@@ -131,22 +182,6 @@ def calcF(Q_, R_, way, rho_):
     if(info != 0): print "\nWARNING: bicgstab failed!", info, way, "\n"; exit()
 
     return F.reshape(chi, chi)
-
-def rhoVersions(rho_):
-    eval_, evec_ = spla.eig(rho_)
-    print "lambda", reduce(lambda x, y: x+y, eval_), eval_.real
-
-    eval_ = eval_.real
-    evalI = 1. / eval_
-    evalSr = map(np.sqrt, eval_)
-    evalSrI = 1. / np.asarray(evalSr)
-    print "evalI  ", evalI, "\nevalSr ", evalSr, "\nevalSrI", evalSrI
-
-    rhoI_ = evec_.dot(np.diag(evalI)).dot(adj(evec_))
-    rhoSr_ = evec_.dot(np.diag(evalSr)).dot(adj(evec_))
-    rhoSrI_ = evec_.dot(np.diag(evalSrI)).dot(adj(evec_))
-
-    return rhoI_, rhoSr_, rhoSrI_
 
 def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_):
     fContrib = - R_.dot(F_).dot(rhoSr_) + F_.dot(R_).dot(rhoSr_)
@@ -206,13 +241,15 @@ def calcQuantities(Q_, R_, rho_, way):
 Main...
 """
 
-xi = 40
+np.random.seed(0)
+xi = 4
 expS = 1.e-6
 maxIter = 190000
 dTau = .01
 K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
 R = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
+rho = np.random.rand(xi, xi) - .5
 
 m, v, w = .5, -.5, 2.
 
@@ -220,11 +257,11 @@ I = 0
 while (I != maxIter):
     print "\t\t\t\t\t\t\t############# ITERATION", I, "#############"
 
-    Q, rho = leftNormalization(K, R)
-    #Q, rho = rightNormalization(K, R)
+    Q, rho = leftNormalization(K, R, rho)
+    #Q, rho = rightNormalization(K, R, ...)
 
     rhoI, rhoSr, rhoSrI = rhoVersions(rho)
-
+    exit()
     F = calcF(Q, R, 'L', rho)
 
     Ystar = calcYstar(Q, R, F, rho, rhoI, rhoSr, rhoSrI)
