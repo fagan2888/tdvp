@@ -40,7 +40,7 @@ def getLargestW(Q_, R_, way, myWhich = 'SR', myGuess = None):
 
     return omega, X.reshape(chi, chi)
 
-def solveLinSys(Q_, R_, way, myGuess = None, method):
+def solveLinSys(Q_, R_, way, myGuess = None, method = None):
     chi, chi = Q_.shape
 
     linOpWrap = functools.partial(linOpForT, Q_, R_, way)
@@ -57,19 +57,19 @@ def solveLinSys(Q_, R_, way, myGuess = None, method):
 
 def tryGetBestSol(Q_, R_, way, guess = None):
     chi, chi = Q_.shape
-    if(guess != None): guess = np.random.rand(chi * chi) - .5
+    if(guess == None): guess = np.random.rand(chi * chi) - .5
     guess = guess.reshape(chi * chi)
 
     try:
         joke, sol = solveLinSys(Q_, R_, way, guess, 'bicgstab')
     except (ArpackError, ArpackNoConvergence):
-        print "solveLinSys failed, trying getLargestW\n"
+        print "solveLinSys failed, trying gmres\n"
         sol = sol.reshape(chi * chi) if joke > 0 else guess
 
         try:
             joke, sol = solveLinSys(Q_, R_, way, guess, 'gmres')
         except (ArpackError, ArpackNoConvergence):
-            print "getLargestW failed; restarting\n"
+            print "gmres failed; trying getLargestW\n"
             sol = sol.reshape(chi * chi)
 
             try:
@@ -169,17 +169,29 @@ def linOpForF(Q_, R_, way, rho_, X):
 
     return FTF.reshape(chi * chi)
 
-def calcF(Q_, R_, way, rho_):
+def calcF(Q_, R_, way, rho_, guess = None):
     chi, chi = Q_.shape
     rhs = - getQrhsQ(Q_, R_, way, rho_)
+
+    if(guess == None): guess = np.random.rand(chi * chi) - .5
+    guess = guess.reshape(chi * chi)
 
     linOpWrap = functools.partial(linOpForF, Q_, R_, way, rho_)
     linOpForSol = spspla.LinearOperator((chi * chi, chi * chi), 
                                         matvec = linOpWrap, dtype = 'float64')
-    guess = np.random.rand(chi * chi) - .5
-    F, info = spspla.bicgstab(linOpForSol, rhs, tol = expS, 
-                              x0 = guess, maxiter = maxIter)
-    if(info != 0): print "\nWARNING: bicgstab failed!", info, way, "\n"; exit()
+    try:
+        F, info = spspla.bicgstab(linOpForSol, rhs, tol = expS, 
+                                  x0 = guess, maxiter = maxIter)
+    except (ArpackError, ArpackNoConvergence):
+        print "bicgstab failed, trying gmres\n"
+        F = F if info > 0 else guess
+
+        try:
+            F, info = spspla.bicgstab(linOpForSol, rhs, tol = expS, 
+                                      x0 = guess, maxiter = maxIter)
+        except (ArpackError, ArpackNoConvergence):
+            print "gmres failed; taking lame solution\n"
+            F = F if info > 0 else guess
 
     return F.reshape(chi, chi)
 
@@ -228,11 +240,13 @@ def calcQuantities(Q_, R_, rho_, way):
     way = 'R' if way == 'L' else 'L'
 
     density = np.trace(R_.dot(rho_).dot(adj(R_)))
-    eFixedN = np.trace(tmp.dot(rho_).dot(adj(tmp)) / (2. * m) + w * RR.dot(rho_).dot(adj(RR)))
+    eFixedN = np.trace(tmp.dot(rho_).dot(adj(tmp)) / (2. * m) 
+                       + w * RR.dot(rho_).dot(adj(RR)))
     print "<n>", density, "e", eFixedN, 
 
     density = np.trace(supOp(R_, R_, way, rho_))
-    eFixedN = np.trace(supOp(tmp, tmp, way, rho_) / (2. * m) + w * supOp(RR, RR, way, rho_))
+    eFixedN = np.trace(supOp(tmp, tmp, way, rho_) / (2. * m) 
+                       + w * supOp(RR, RR, way, rho_))
     print "<n>", density, "e", eFixedN
 
 
@@ -250,6 +264,7 @@ K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
 R = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 rho = np.random.rand(xi, xi) - .5
+F = np.random.rand(xi, xi) - .5
 
 m, v, w = .5, -.5, 2.
 
@@ -261,8 +276,8 @@ while (I != maxIter):
     #Q, rho = rightNormalization(K, R, ...)
 
     rhoI, rhoSr, rhoSrI = rhoVersions(rho)
-    exit()
-    F = calcF(Q, R, 'L', rho)
+
+    F = calcF(Q, R, 'L', rho, F)
 
     Ystar = calcYstar(Q, R, F, rho, rhoI, rhoSr, rhoSrI)
 
