@@ -131,17 +131,17 @@ def rightNormalization(K_, R_):
     return Q_, l_
 
 def rhoVersions(rho_):
-    eval_, evec_ = spla.eig(rho_)
-    print "lambda", reduce(lambda x, y: x+y, eval_), eval_.real
+    eval_, evec_ = spla.eigh(rho_)
+    print "lambda", reduce(lambda x, y: x+y, eval_), eval_
 
-    eval_ = eval_.real
+    eval_ = eval_
     evalI = 1. / eval_
     evalSr = map(np.sqrt, eval_)
     evalSrI = 1. / np.asarray(evalSr)
     print "evalI  ", evalI, "\nevalSr ", evalSr, "\nevalSrI", evalSrI
 
     ULUd = evec_.dot(np.diag(eval_)).dot(adj(evec_))
-    print "r - UdU+\n", rho_-ULUd
+    print "r - UdU+\n", rho_ - ULUd
 
     rhoI_ = evec_.dot(np.diag(evalI)).dot(adj(evec_))
     rhoSr_ = evec_.dot(np.diag(evalSr)).dot(adj(evec_))
