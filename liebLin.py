@@ -1,6 +1,8 @@
 #!/usr/bin/python
 
 import numpy as np
+from scipy.sparse.linalg import ArpackNoConvergence
+from scipy.sparse.linalg import ArpackError
 import scipy.sparse.linalg as spspla
 import scipy.linalg as spla
 import functools
@@ -25,11 +27,7 @@ def linOpForT(Q_, R_, way, X):
 
     return XTX.reshape(chi * chi)
 
-def getLargestW(Q_, R_, way, myWhich = 'SR', myGuess = None):
-    """Returns density matrix by diagonalizing.
-
-    Should it be SR or SM?
-    """
+def getLargestW(Q_, R_, way, myWhich, myGuess):
     chi, chi = Q_.shape
 
     linOpWrap = functools.partial(linOpForT, Q_, R_, way)
@@ -40,7 +38,7 @@ def getLargestW(Q_, R_, way, myWhich = 'SR', myGuess = None):
 
     return omega, X.reshape(chi, chi)
 
-def solveLinSys(Q_, R_, way, myGuess = None, method = None):
+def solveLinSys(Q_, R_, way, myGuess, method = None):
     chi, chi = Q_.shape
 
     linOpWrap = functools.partial(linOpForT, Q_, R_, way)
@@ -51,32 +49,42 @@ def solveLinSys(Q_, R_, way, myGuess = None, method = None):
                                   x0 = myGuess, maxiter = maxIter)
     else:#if(method == 'gmres'):
         S, info = spspla.gmres(linOpForSol, np.zeros(chi * chi), tol = expS, 
-                                  x0 = myGuess, maxiter = maxIter)
+                               x0 = myGuess, maxiter = maxIter)
 
     return info, S.reshape(chi, chi)
 
-def tryGetBestSol(Q_, R_, way, guess = None):
+def tryGetBestSol(Q_, R_, way, guess):
     chi, chi = Q_.shape
-    if(guess == None): guess = np.random.rand(chi * chi) - .5
+    if(way == 'L'): guess = np.eye(chi, chi)
+    #print "GUESS\n", guess
     guess = guess.reshape(chi * chi)
+
+    try:
+        joke, sol = getLargestW(Q_, R_, way, 'SM', guess)
+    except:
+        print "getLargestW: eigs failed, trying random seed"
+        guess = np.random.rand(chi * chi)
+
+        try:
+            joke, sol = getLargestW(Q_, R_, way, 'SM', guess)
+        except:
+            print "getLargestW: eigs failed, trying bicgstab"
+            sol = np.random.rand(chi, chi)
+
+    print "SOL\n", sol
+    guess = sol.reshape(chi * chi).real
 
     try:
         joke, sol = solveLinSys(Q_, R_, way, guess, 'bicgstab')
     except (ArpackError, ArpackNoConvergence):
-        print "solveLinSys failed, trying gmres\n"
-        sol = sol.reshape(chi * chi) if joke > 0 else guess
+        print "solveLinSys: bicgstab failed, trying gmres"
+        guess = sol.reshape(chi * chi) if joke > 0 else guess
 
         try:
             joke, sol = solveLinSys(Q_, R_, way, guess, 'gmres')
         except (ArpackError, ArpackNoConvergence):
-            print "gmres failed; trying getLargestW\n"
-            sol = sol.reshape(chi * chi)
-
-            try:
-                joke, sol = getLargestW(Q_, R_, way, guess)
-            except (ArpackError, ArpackNoConvergence):
-                print "Continuing with lame solution\n"
-                sol = 0.5 * (sol + guess)
+            print "solveLinSys: gmres failed, lame solution"
+            sol = 0.5 * (sol + guess)
 
     return sol
 
@@ -93,11 +101,12 @@ def leftNormalization(K_, R_, guess):
     print "K\n", K_, "\nR\n", R_, "\nQ\n", Q_
 
     l_ = tryGetBestSol(Q_, R_, 'L', guess)
-    r_ = tryGetBestSol(Q_, R_, 'R', guess)
     l_ = fixPhase(l_)
-    r_ = fixPhase(r_)
     fac = np.trace(l_) / chi
     print "l", np.trace(l_), "\n", l_/fac
+
+    r_ = tryGetBestSol(Q_, R_, 'R', guess)
+    r_ = fixPhase(r_)
     print "r", np.trace(r_), "\n", r_
 
     RR = R_.dot(R_)
@@ -255,10 +264,10 @@ def calcQuantities(Q_, R_, rho_, way):
 Main...
 """
 
-np.random.seed(0)
-xi = 4
+#np.random.seed(2)
+xi = 6
 expS = 1.e-6
-maxIter = 190000
+maxIter = 9000
 dTau = .01
 K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
