@@ -7,7 +7,7 @@ import scipy.sparse.linalg as spspla
 import scipy.linalg as spla
 import functools
 
-np.set_printoptions(precision = 4, suppress = True)
+#np.set_printoptions(precision = 4, suppress = True)
 
 adj = lambda X: np.transpose(np.conjugate(X))
 comm = lambda X, Y: np.dot(X, Y) - np.dot(Y, X)
@@ -56,6 +56,7 @@ def solveLinSys(Q_, R_, way, myGuess, method = None):
 def tryGetBestSol(Q_, R_, way, guess):
     chi, chi = Q_.shape
     if(way == 'L'): guess = np.eye(chi, chi)
+    if(guess == None): guess = np.random.rand(chi, chi) - .5
     #print "GUESS\n", guess
     guess = guess.reshape(chi * chi)
 
@@ -63,25 +64,25 @@ def tryGetBestSol(Q_, R_, way, guess):
         joke, sol = getLargestW(Q_, R_, way, 'SM', guess)
     except:
         print "getLargestW: eigs failed, trying random seed"
-        guess = np.random.rand(chi * chi)
+        guess = np.random.rand(chi * chi) - .5
 
         try:
             joke, sol = getLargestW(Q_, R_, way, 'SM', guess)
         except:
             print "getLargestW: eigs failed, trying bicgstab"
-            sol = np.random.rand(chi, chi)
+            sol = np.random.rand(chi, chi) - .5
 
     print "SOL\n", sol
     guess = sol.reshape(chi * chi).real
 
     try:
-        joke, sol = solveLinSys(Q_, R_, way, guess, 'bicgstab')
+        joke, sol = solveLinSys(Q_, R_, way, guess, 'gmres')
     except (ArpackError, ArpackNoConvergence):
         print "solveLinSys: bicgstab failed, trying gmres"
         guess = sol.reshape(chi * chi) if joke > 0 else guess
 
         try:
-            joke, sol = solveLinSys(Q_, R_, way, guess, 'gmres')
+            joke, sol = solveLinSys(Q_, R_, way, guess, 'bicgstab')
         except (ArpackError, ArpackNoConvergence):
             print "solveLinSys: gmres failed, lame solution"
             sol = 0.5 * (sol + guess)
@@ -100,18 +101,18 @@ def leftNormalization(K_, R_, guess):
     Q_ = K_ - .5 * (adj(R_).dot(R_))
     print "K\n", K_, "\nR\n", R_, "\nQ\n", Q_
 
-    l_ = tryGetBestSol(Q_, R_, 'L', guess)
-    l_ = fixPhase(l_)
-    fac = np.trace(l_) / chi
-    print "l", np.trace(l_), "\n", l_/fac
+    #l_ = tryGetBestSol(Q_, R_, 'L', guess)
+    #l_ = fixPhase(l_)
+    #fac = np.trace(l_) / chi
+    #print "l", np.trace(l_), "\n", l_/fac
 
     r_ = tryGetBestSol(Q_, R_, 'R', guess)
     r_ = fixPhase(r_)
     print "r", np.trace(r_), "\n", r_
 
-    RR = R_.dot(R_)
-    Rd = adj(R_)
-    print "(R^+)^2 - (R^2)^+\n", Rd.dot(Rd) - adj(RR)
+    #RR = R_.dot(R_)
+    #Rd = adj(R_)
+    #print "(R^+)^2 - (R^2)^+\n", Rd.dot(Rd) - adj(RR)
 
     return Q_, r_
 
@@ -134,7 +135,7 @@ def rhoVersions(rho_):
     eval_, evec_ = spla.eigh(rho_)
     print "lambda", reduce(lambda x, y: x+y, eval_), eval_
 
-    eval_ = eval_
+    eval_ = abs(eval_)
     evalI = 1. / eval_
     evalSr = map(np.sqrt, eval_)
     evalSrI = 1. / np.asarray(evalSr)
@@ -154,12 +155,12 @@ def rhoVersions(rho_):
 def getQrhsQ(Q_, R_, way, rho_):
     chi, chi = Q_.shape
     commQR = comm(Q_, R_)
-    RR = R_.dot(R_)
+    #RR = R_.dot(R_)
     Id = np.eye(chi, chi)
 
     kinE = 1./(2. * m) * supOp(commQR, commQR, way, Id)
     potE = v * supOp(R_, R_, way, Id)
-    intE = w * supOp(RR, RR, way, Id)
+    intE = w * supOp(R_, R_, way, supOp(R_, R_, way, Id))#supOp(RR, RR, way, Id)
     ham = kinE + potE + intE
 
     energy = np.trace(ham.dot(rho_))
@@ -178,7 +179,7 @@ def linOpForF(Q_, R_, way, rho_, X):
 
     return FTF.reshape(chi * chi)
 
-def calcF(Q_, R_, way, rho_, guess = None):
+def calcF(Q_, R_, way, rho_, guess):
     chi, chi = Q_.shape
     rhs = - getQrhsQ(Q_, R_, way, rho_)
 
@@ -189,19 +190,20 @@ def calcF(Q_, R_, way, rho_, guess = None):
     linOpForSol = spspla.LinearOperator((chi * chi, chi * chi), 
                                         matvec = linOpWrap, dtype = 'float64')
     try:
-        F, info = spspla.bicgstab(linOpForSol, rhs, tol = expS, 
-                                  x0 = guess, maxiter = maxIter)
+        F, info = spspla.gmres(linOpForSol, rhs, tol = expS, x0 = guess, 
+                               maxiter = maxIter)
     except (ArpackError, ArpackNoConvergence):
-        print "bicgstab failed, trying gmres\n"
-        F = F if info > 0 else guess
+        print "calcF: bicgstab failed, trying gmres\n"
+        guess = F if info > 0 else guess
 
         try:
-            F, info = spspla.bicgstab(linOpForSol, rhs, tol = expS, 
-                                      x0 = guess, maxiter = maxIter)
+            F, info = spspla.bicgstab(linOpForSol, rhs, tol = expS, x0 = guess, 
+                                   maxiter = maxIter)
         except (ArpackError, ArpackNoConvergence):
-            print "gmres failed; taking lame solution\n"
+            print "calcF: gmres failed, taking lame solution\n"
             F = F if info > 0 else guess
 
+    print "F\n", F.reshape(chi, chi)
     return F.reshape(chi, chi)
 
 def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_):
@@ -228,7 +230,8 @@ def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_):
 def getUpdateVandW(R_, rhoSrI_, Ystar_):
     Vstar_ = - adj(R_).dot(Ystar_).dot(rhoSrI_)
     Wstar_ = Ystar_.dot(rhoSrI_)
-    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_
+    conver = np.trace(adj(Ystar).dot(Ystar))
+    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_, "\nConver", conver,
 
     return Vstar_, Wstar_
 
@@ -265,7 +268,7 @@ Main...
 """
 
 #np.random.seed(2)
-xi = 6
+xi = 40
 expS = 1.e-6
 maxIter = 9000
 dTau = .01
