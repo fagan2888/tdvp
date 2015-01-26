@@ -34,7 +34,7 @@ def getLargestW(Q_, R_, way, myWhich, myGuess):
     linOpForEigs = spspla.LinearOperator((chi * chi, chi * chi), 
                                          matvec = linOpWrap, dtype = 'float64')
     omega, X = spspla.eigs(linOpForEigs, k = 1, which = myWhich, tol = expS, 
-                           maxiter = maxIter, v0 = myGuess)
+                           maxiter = maxIter, v0 = myGuess, ncv = 10)
 
     return omega, X.reshape(chi, chi)
 
@@ -198,7 +198,7 @@ def calcF(Q_, R_, way, rho_, guess):
 
         try:
             F, info = spspla.bicgstab(linOpForSol, rhs, tol = expS, x0 = guess, 
-                                   maxiter = maxIter)
+                                      maxiter = maxIter)
         except (ArpackError, ArpackNoConvergence):
             print "calcF: gmres failed, taking lame solution\n"
             F = F if info > 0 else guess
@@ -259,7 +259,7 @@ def calcQuantities(Q_, R_, rho_, way):
     density = np.trace(supOp(R_, R_, way, rho_))
     eFixedN = np.trace(supOp(tmp, tmp, way, rho_) / (2. * m) 
                        + w * supOp(RR, RR, way, rho_))
-    print "<n>", density, "e", eFixedN
+    print "e/<n>^3", eFixedN/density**3, "g/<n>", w/density
 
 
 
@@ -275,7 +275,7 @@ dTau = .01
 K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
 R = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
-rho = np.random.rand(xi, xi) - .5
+rho = fixPhase(np.random.rand(xi, xi) - .5)
 F = np.random.rand(xi, xi) - .5
 
 m, v, w = .5, -.5, 2.
