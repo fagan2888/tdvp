@@ -45,8 +45,8 @@ def solveLinSys(Q_, R_, way, myGuess, method = None):
     linOpForSol = spspla.LinearOperator((chi * chi, chi * chi), 
                                         matvec = linOpWrap, dtype = 'float64')
     if(method == 'bicgstab'):
-        S, info = spspla.bicgstab(linOpForSol, np.zeros(chi * chi), tol = expS, 
-                                  x0 = myGuess, maxiter = maxIter)
+        S, info = spspla.lgmres(linOpForSol, np.zeros(chi * chi), tol = expS, 
+                                x0 = myGuess, maxiter = maxIter, outer_k = 6)
     else:#if(method == 'gmres'):
         S, info = spspla.gmres(linOpForSol, np.zeros(chi * chi), tol = expS, 
                                x0 = myGuess, maxiter = maxIter)
@@ -186,8 +186,8 @@ def calcF(Q_, R_, way, rho_, guess):
     linOpForSol = spspla.LinearOperator((chi * chi, chi * chi), 
                                         matvec = linOpWrap, dtype = 'float64')
     try:
-        F, info = spspla.gmres(linOpForSol, rhs, tol = expS, x0 = guess, 
-                               maxiter = maxIter)
+        F, info = spspla.lgmres(linOpForSol, rhs, tol = expS, x0 = guess, 
+                                maxiter = maxIter, outer_k = 6)
     except (ArpackError, ArpackNoConvergence):
         print "calcF: bicgstab failed, trying gmres\n"
         guess = F if info > 0 else guess
@@ -204,6 +204,12 @@ def calcF(Q_, R_, way, rho_, guess):
 
 def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_):
     fContrib = - R_.dot(F_).dot(rhoSr_) + F_.dot(R_).dot(rhoSr_)
+
+    #commQR = comm(Q_, R_)
+    #partOne = adj(Q_).dot(commQR).dot(rhoSr_) 
+    #- commQR.dot(rho_).dot(adj(Q_)).dot(rhoSrI_)
+    #partTwo = R_.dot(commQR).dot(rho_).dot(adj(R_)).dot(rhoSrI_) 
+    #- R_.dot(adj(R_)).dot(commQR).dot(rhoSr_)
 
     common = comm(Q_, R_).dot(rho_)
     partOne = comm(adj(Q_), common).dot(rhoSrI_)
