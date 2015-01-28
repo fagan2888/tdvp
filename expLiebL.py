@@ -148,15 +148,14 @@ def rhoVersions(rho_):
 
     return rhoI_, rhoSr_, rhoSrI_
 
-def getQrhsQ(Q_, R_, way, rho_):
+def getQrhsQ(Q_, R_, way, rho_, muL_):
     chi, chi = Q_.shape
     commQR = comm(Q_, R_)
-    #RR = R_.dot(R_)
     Id = np.eye(chi, chi)
 
     kinE = 1./(2. * m) * supOp(commQR, commQR, way, Id)
     potE = v * supOp(R_, R_, way, Id)
-    intE = w * supOp(R_, R_, way, supOp(R_, R_, way, Id))#supOp(RR, RR, way, Id)
+    intE = w * supOp(R_, R_, way, muL_)
     ham = kinE + potE + intE
 
     energy = np.trace(ham.dot(rho_))
@@ -175,9 +174,9 @@ def linOpForF(Q_, R_, way, rho_, X):
 
     return FTF.reshape(chi * chi)
 
-def calcF(Q_, R_, way, rho_, guess):
+def calcF(Q_, R_, way, rho_, muL_, guess):
     chi, chi = Q_.shape
-    rhs = - getQrhsQ(Q_, R_, way, rho_)
+    rhs = - getQrhsQ(Q_, R_, way, rho_, muL_)
 
     if(guess == None): guess = np.random.rand(chi * chi) - .5
     guess = guess.reshape(chi * chi)
@@ -202,7 +201,7 @@ def calcF(Q_, R_, way, rho_, guess):
     print "F\n", F.reshape(chi, chi)
     return F.reshape(chi, chi)
 
-def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_):
+def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_, muL_, muR_):
     fContrib = - R_.dot(F_).dot(rhoSr_) + F_.dot(R_).dot(rhoSr_)
 
     #commQR = comm(Q_, R_)
@@ -218,13 +217,18 @@ def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_):
     kContrib = (partOne - partTwo) / (2. * m)
     pContrib = v * (R_.dot(rhoSr_))
 
-    RR = R_.dot(R_)
-    partOne = RR.dot(rho_).dot(adj(R_)).dot(rhoSrI_)
-    partTwo = adj(R_).dot(RR).dot(rhoSr_)
+    #RR = R_.dot(R_)
+    partOne = R_.dot(muR_).dot(rhoSrI_)
+    partTwo = muL_.dot(R_).dot(rhoSr_)
 
     iContrib = w * (partOne + partTwo)
 
-    Ystar_ = fContrib + kContrib + pContrib + iContrib
+    partOne = - R_.dot(muL_).dot(muR_).dot(rhoSrI_)
+    partTwo = muL_.dot(R_).dot(muR_).dot(rhoSrI_)
+
+    lrContrib = w * (partOne + partTwo)
+
+    Ystar_ = fContrib + kContrib + pContrib + iContrib + lrContrib
     print "Ystar\n", Ystar_
 
     return Ystar_
@@ -233,7 +237,7 @@ def getUpdateVandW(R_, rhoSrI_, Ystar_):
     Vstar_ = - adj(R_).dot(Ystar_).dot(rhoSrI_)
     Wstar_ = Ystar_.dot(rhoSrI_)
     conver = np.trace(adj(Ystar_).dot(Ystar_))
-    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_, "\nConver", conver,
+    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_, "\nConver", I, conver,
 
     return Vstar_, Wstar_
 
@@ -253,15 +257,49 @@ def calcQuantities(Q_, R_, rho_, way):
     #if(way == 'L'): way = 'R' else: way = 'L'
     way = 'R' if way == 'L' else 'L'
 
-    density = np.trace(R_.dot(rho_).dot(adj(R_)))
-    eFixedN = np.trace(tmp.dot(rho_).dot(adj(tmp)) / (2. * m) 
-                       + w * RR.dot(rho_).dot(adj(RR)))
-    print "<n>", density, "e", eFixedN, 
-
     density = np.trace(supOp(R_, R_, way, rho_))
     eFixedN = np.trace(supOp(tmp, tmp, way, rho_) / (2. * m) 
                        + w * supOp(RR, RR, way, rho_))
+
+    print "<n>", density, "e", eFixedN, 
     print "e/<n>^3", eFixedN/density**3, "g/<n>", w/density
+
+def linOpForExp(Q_, R_, way, X):
+    chi, chi = Q_.shape
+    XTX = mu * X - linOpForT(Q_, R_, way, X)
+    #print "XTX", XTX
+
+    return XTX
+
+def solveForMu(Q_, R_, way, myGuess, method, X):
+    chi, chi = Q_.shape
+    inhom = supOp(R_, R_, way, X).reshape(chi * chi)
+    print "solveForMu:", way
+
+    linOpWrap = functools.partial(linOpForExp, Q_, R_, way)
+    linOpForSol = spspla.LinearOperator((chi * chi, chi * chi), 
+                                        matvec = linOpWrap, dtype = 'float64')
+    if(method == 'bicgstab'):
+        S, info = spspla.lgmres(linOpForSol, inhom, tol = expS, x0 = myGuess, 
+                                maxiter = maxIter, outer_k = 6)
+    else:#if(method == 'gmres'):
+        S, info = spspla.gmres(linOpForSol, inhom, tol = expS, x0 = myGuess, 
+                               maxiter = maxIter)
+
+    return info, S.reshape(chi, chi)
+
+def calcMuS(Q_, R_, rho_, guessL, guessR):
+    chi, chi = Q_.shape
+    guessL = guessL.reshape(chi * chi)
+    guessR = guessR.reshape(chi * chi)
+
+    info, muL_ = solveForMu(Q_, R_, 'L', guessL, 'bicgstab', np.eye(chi, chi))
+    print "info", info, "muL\n", muL_
+
+    info, muR_ = solveForMu(Q_, R_, 'R', guessR, 'bicgstab', rho_)
+    print "info", info, "muR\n", muR_
+
+    return muL_, muR_
 
 
 
@@ -279,8 +317,10 @@ K = .5 * (K - adj(K))
 R = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 rho = fixPhase(np.random.rand(xi, xi) - .5)
 F = np.random.rand(xi, xi) - .5
+muL = fixPhase(np.random.rand(xi, xi) - .5)
+muR = fixPhase(np.random.rand(xi, xi) - .5)
 
-m, v, w = .5, -.5, 2.
+m, v, w, mu = .5, -.5, 2., 8.
 
 I = 0
 while (I != maxIter):
@@ -291,9 +331,11 @@ while (I != maxIter):
 
     rhoI, rhoSr, rhoSrI = rhoVersions(rho)
 
-    F = calcF(Q, R, 'L', rho, F)
+    muL, muR = calcMuS(Q, R, rho, muL, muR)
 
-    Ystar = calcYstar(Q, R, F, rho, rhoI, rhoSr, rhoSrI)
+    F = calcF(Q, R, 'L', rho, muL, F)
+
+    Ystar = calcYstar(Q, R, F, rho, rhoI, rhoSr, rhoSrI, muL, muR)
 
     Vstar, Wstar = getUpdateVandW(R, rhoSrI, Ystar)
 
