@@ -237,7 +237,7 @@ def getUpdateVandW(R_, rhoSrI_, Ystar_):
     Vstar_ = - adj(R_).dot(Ystar_).dot(rhoSrI_)
     Wstar_ = Ystar_.dot(rhoSrI_)
     conver = np.trace(adj(Ystar_).dot(Ystar_))
-    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_, "\nConver", I, conver,
+    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_, "\nConver", I, conver, dTau,
 
     return Vstar_, Wstar_
 
@@ -263,6 +263,12 @@ def calcQuantities(Q_, R_, rho_, way):
 
     print "<n>", density, "e", eFixedN, 
     print "e/<n>^3", eFixedN/density**3, "g/<n>", w/density
+
+def evaluateStep(Ystar_, oldEta_, dTau_):
+    newEta = np.trace(adj(Ystar_).dot(Ystar_))
+    if(newEta > oldEta_ and dTau_ > dTauMin): dTau_ = dTau_ / 1.05
+
+    return newEta, dTau_
 
 def linOpForExp(Q_, R_, way, X):
     chi, chi = Q_.shape
@@ -310,8 +316,8 @@ Main...
 #np.random.seed(2)
 xi = 40
 expS = 1.e-6
-maxIter = 9000
-dTau = .01
+maxIter = 90000
+oldEta, dTau, dTauMin = 1.e9, .0025, 1.05e-4
 K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
 R = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
@@ -336,6 +342,8 @@ while (I != maxIter):
     F = calcF(Q, R, 'L', rho, muL, F)
 
     Ystar = calcYstar(Q, R, F, rho, rhoI, rhoSr, rhoSrI, muL, muR)
+
+    oldEta, dTau = evaluateStep(Ystar, oldEta, dTau)
 
     Vstar, Wstar = getUpdateVandW(R, rhoSrI, Ystar)
 

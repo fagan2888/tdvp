@@ -45,8 +45,8 @@ def solveLinSys(Q_, R_, way, myGuess, method = None):
     linOpForSol = spspla.LinearOperator((chi * chi, chi * chi), 
                                         matvec = linOpWrap, dtype = 'float64')
     if(method == 'bicgstab'):
-        S, info = spspla.bicgstab(linOpForSol, np.zeros(chi * chi), tol = expS, 
-                                  x0 = myGuess, maxiter = maxIter)
+        S, info = spspla.lgmres(linOpForSol, np.zeros(chi * chi), tol = expS, 
+                                x0 = myGuess, maxiter = maxIter, outer_k = 6)
     else:#if(method == 'gmres'):
         S, info = spspla.gmres(linOpForSol, np.zeros(chi * chi), tol = expS, 
                                x0 = myGuess, maxiter = maxIter)
@@ -151,7 +151,6 @@ def rhoVersions(rho_):
 def getQrhsQ(Q_, R_, way, rho_):
     chi, chi = Q_.shape
     commQR = comm(Q_, R_)
-    #RR = R_.dot(R_)
     Id = np.eye(chi, chi)
 
     kinE = 1./(2. * m) * supOp(commQR, commQR, way, Id)
@@ -186,8 +185,8 @@ def calcF(Q_, R_, way, rho_, guess):
     linOpForSol = spspla.LinearOperator((chi * chi, chi * chi), 
                                         matvec = linOpWrap, dtype = 'float64')
     try:
-        F, info = spspla.gmres(linOpForSol, rhs, tol = expS, x0 = guess, 
-                               maxiter = maxIter)
+        F, info = spspla.lgmres(linOpForSol, rhs, tol = expS, x0 = guess, 
+                                maxiter = maxIter, outer_k = 6)
     except (ArpackError, ArpackNoConvergence):
         print "calcF: bicgstab failed, trying gmres\n"
         guess = F if info > 0 else guess
@@ -227,7 +226,7 @@ def getUpdateVandW(R_, rhoSrI_, Ystar_):
     Vstar_ = - adj(R_).dot(Ystar_).dot(rhoSrI_)
     Wstar_ = Ystar_.dot(rhoSrI_)
     conver = np.trace(adj(Ystar_).dot(Ystar_))
-    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_, "\nConver", conver,
+    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_, "\nConver", I, conver, dTau,
 
     return Vstar_, Wstar_
 
@@ -247,15 +246,18 @@ def calcQuantities(Q_, R_, rho_, way):
     #if(way == 'L'): way = 'R' else: way = 'L'
     way = 'R' if way == 'L' else 'L'
 
-    density = np.trace(R_.dot(rho_).dot(adj(R_)))
-    eFixedN = np.trace(tmp.dot(rho_).dot(adj(tmp)) / (2. * m) 
-                       + w * RR.dot(rho_).dot(adj(RR)))
-    print "<n>", density, "e", eFixedN, 
-
     density = np.trace(supOp(R_, R_, way, rho_))
     eFixedN = np.trace(supOp(tmp, tmp, way, rho_) / (2. * m) 
                        + w * supOp(RR, RR, way, rho_))
+
+    print "<n>", density, "e", eFixedN, 
     print "e/<n>^3", eFixedN/density**3, "g/<n>", w/density
+
+def evaluateStep(Ystar_, oldEta_, dTau_):
+    newEta = np.trace(adj(Ystar_).dot(Ystar_))
+    if(newEta > oldEta_ and dTau_ > dTauMin): dTau_ = dTau_ / 1.05
+
+    return newEta, dTau_
 
 
 
@@ -264,10 +266,10 @@ Main...
 """
 
 #np.random.seed(2)
-xi = 40
+xi = 10
 expS = 1.e-6
-maxIter = 9000
-dTau = .01
+maxIter = 90000
+oldEta, dTau, dTauMin = 1.e9, .0025, 1.05e-4
 K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
 R = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
@@ -288,6 +290,8 @@ while (I != maxIter):
     F = calcF(Q, R, 'L', rho, F)
 
     Ystar = calcYstar(Q, R, F, rho, rhoI, rhoSr, rhoSrI)
+
+    oldEta, dTau = evaluateStep(Ystar, oldEta, dTau)
 
     Vstar, Wstar = getUpdateVandW(R, rhoSrI, Ystar)
 
