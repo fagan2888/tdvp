@@ -56,7 +56,7 @@ def solveLinSys(Q_, R_, way, myGuess, method = None):
 def tryGetBestSol(Q_, R_, way, guess):
     chi, chi = Q_.shape
     if(way == 'L'): guess = np.eye(chi, chi)
-    if(guess == None): guess = np.random.rand(chi, chi) - .5
+    if(guess == None): guess = fixPhase(np.random.rand(chi, chi) - .5)
     #print "GUESS\n", guess
     guess = guess.reshape(chi * chi)
 
@@ -75,6 +75,7 @@ def tryGetBestSol(Q_, R_, way, guess):
     print "SOL\n", sol
     guess = sol.reshape(chi * chi).real
 
+    """
     try:
         joke, sol = solveLinSys(Q_, R_, way, guess, 'bicgstab')
     except (ArpackError, ArpackNoConvergence):
@@ -86,8 +87,9 @@ def tryGetBestSol(Q_, R_, way, guess):
         except (ArpackError, ArpackNoConvergence):
             print "solveLinSys: gmres failed, lame solution"
             sol = 0.5 * (sol + guess)
+    """
 
-    return sol
+    return sol.real
 
 def fixPhase(X):
     Y = X / np.trace(X)
@@ -255,7 +257,7 @@ def calcQuantities(Q_, R_, rho_, way):
 
 def evaluateStep(Ystar_, oldEta_, dTau_):
     newEta = np.trace(adj(Ystar_).dot(Ystar_))
-    if(newEta > oldEta_ and dTau_ > dTauMin): dTau_ = dTau_ / 1.05
+    if(newEta > oldEta_ and dTau_ > dTauMin): dTau_ = dTau_ / 1.001
 
     return newEta, dTau_
 
@@ -266,10 +268,10 @@ Main...
 """
 
 #np.random.seed(2)
-xi = 10
-expS = 1.e-6
+xi = 40
+expS = 1.e-12
 maxIter = 90000
-oldEta, dTau, dTauMin = 1.e9, .0025, 1.05e-4
+oldEta, dTau, dTauMin = 1.e9, .0125, 1.01e-4
 K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
 R = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
@@ -300,3 +302,5 @@ while (I != maxIter):
     K, R = doUpdateQandR(K, R, Wstar)
 
     I += 1
+
+    if(oldEta < expS): break
