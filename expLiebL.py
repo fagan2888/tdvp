@@ -5,6 +5,7 @@ from scipy.sparse.linalg import ArpackNoConvergence
 from scipy.sparse.linalg import ArpackError
 import scipy.sparse.linalg as spspla
 import scipy.linalg as spla
+import scipy.integrate as spig
 import functools
 
 #np.set_printoptions(precision = 4, suppress = True)
@@ -206,12 +207,6 @@ def calcF(Q_, R_, way, rho_, muL_, guess):
 def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_, muL_, muR_):
     fContrib = - R_.dot(F_).dot(rhoSr_) + F_.dot(R_).dot(rhoSr_)
 
-    #commQR = comm(Q_, R_)
-    #partOne = adj(Q_).dot(commQR).dot(rhoSr_) 
-    #- commQR.dot(rho_).dot(adj(Q_)).dot(rhoSrI_)
-    #partTwo = R_.dot(commQR).dot(rho_).dot(adj(R_)).dot(rhoSrI_) 
-    #- R_.dot(adj(R_)).dot(commQR).dot(rhoSr_)
-
     common = comm(Q_, R_).dot(rho_)
     partOne = comm(adj(Q_), common).dot(rhoSrI_)
     partTwo = R_.dot(comm(common, adj(R_))).dot(rhoSrI_)
@@ -238,7 +233,7 @@ def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_, muL_, muR_):
 def getUpdateVandW(R_, rhoSrI_, Ystar_):
     Vstar_ = - adj(R_).dot(Ystar_).dot(rhoSrI_)
     Wstar_ = Ystar_.dot(rhoSrI_)
-    conver = np.trace(adj(Ystar_).dot(Ystar_))
+    conver = np.sqrt(np.trace(adj(Ystar_).dot(Ystar_)))
     print "Vstar\n", Vstar_, "\nWstar\n", Wstar_, "\nConver", I, conver, dTau,
 
     return Vstar_, Wstar_
@@ -267,10 +262,53 @@ def calcQuantities(Q_, R_, rho_, way):
     print "e/<n>^3", eFixedN/density**3, "g/<n>", w/density
 
 def evaluateStep(Ystar_, oldEta_, dTau_):
-    newEta = np.trace(adj(Ystar_).dot(Ystar_))
+    newEta = np.sqrt(np.trace(adj(Ystar_).dot(Ystar_)))
     if(newEta > oldEta_ and dTau_ > dTauMin): dTau_ = dTau_ / 1.001
+    #if(I % 499 == 0 and newEta < oldEta_ and dTau_ < dTauMax): dTau_ = dTau_ * 1.001
 
     return newEta, dTau_
+
+def linOpForOde(X, x, Q_, R_, way):
+    return linOpForT(Q_, R_, way, X)
+
+def onePartCorr(Q_, R_, rho_):
+    chi, chi = Q_.shape
+    Id = np.eye(chi, chi)
+    x = np.linspace(0, 50, 150)
+
+    ket = supOp(Id, R_, 'R', rho_)
+    l0 = supOp(R_, Id, 'L', Id).reshape(chi * chi)
+
+    n = np.trace(l0.reshape(chi, chi).dot(ket))
+    print "init cond", n
+
+    bra = spig.odeint(linOpForOde, l0, x, args = (Q_, R_, 'L'), rtol = expS, 
+                      atol = expS)
+    bra = bra.reshape(len(x), chi, chi)
+
+    corr = [bra[i].dot(ket) for i in range(len(x))]
+    corr = np.array(map(np.trace, corr)) / n
+    print "bra", bra.shape, x.shape, corr.shape, "\ncorr\n", \
+        '\n'.join(map(str, corr))
+
+def rhoRhoCorr(Q_, R_, rho_):
+    chi, chi = Q_.shape
+    Id = np.eye(chi, chi)
+    x = np.linspace(0, 50, 150)
+
+    ket = supOp(R_, R_, 'R', rho_)
+    l0 = supOp(R_, R_, 'L', Id).reshape(chi * chi)
+
+    n = np.trace(l0.reshape(chi, chi).dot(ket))
+    print "init cond", n
+
+    bra = spig.odeint(linOpForOde, l0, x, args = (Q_, R_, 'L'), rtol = expS, 
+                      atol = expS)
+    bra = bra.reshape(len(x), chi, chi)
+
+    corr = [bra[i].dot(ket) for i in range(len(x))]
+    corr = np.array(map(np.trace, corr))
+    print "bra", bra.shape, x.shape, corr.shape, "\ncorr\n", corr
 
 def linOpForExp(Q_, R_, way, X):
     chi, chi = Q_.shape
@@ -316,22 +354,22 @@ Main...
 """
 
 #np.random.seed(2)
-xi = 40
+xi = 10
 expS = 1.e-12
 maxIter = 90000
-oldEta, dTau, dTauMin = 1.e9, .0125, 1.01e-4
+oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/2., 1.01e-4, .125
 K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
 R = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 rho = fixPhase(np.random.rand(xi, xi) - .5)
 F = np.random.rand(xi, xi) - .5
-muL = fixPhase(np.random.rand(xi, xi) - .5)
-muR = fixPhase(np.random.rand(xi, xi) - .5)
+muL = (np.random.rand(xi, xi) - .5)
+muR = (np.random.rand(xi, xi) - .5)
 
-m, v, w, mu = .5, -.5, 2., 8.
+m, v, w, mu = .5, -.5, 21., 4.
 
-I = 0
-while (I != maxIter):
+I, flag = 0, False
+while (not flag):#I != maxIter):
     print "\t\t\t\t\t\t\t############# ITERATION", I, "#############"
 
     Q, rho = leftNormalization(K, R, rho)
@@ -350,9 +388,11 @@ while (I != maxIter):
     Vstar, Wstar = getUpdateVandW(R, rhoSrI, Ystar)
 
     calcQuantities(Q, R, rho, 'L')
+    onePartCorr(Q, R, rho)
+    rhoRhoCorr(Q, R, rho)
 
     K, R = doUpdateQandR(K, R, Wstar)
 
     I += 1
 
-    if(oldEta < expS): break
+    if(oldEta < 100 * expS): flag = True#break
