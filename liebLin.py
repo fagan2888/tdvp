@@ -12,6 +12,7 @@ import functools
 
 adj = lambda X: np.transpose(np.conjugate(X))
 comm = lambda X, Y: np.dot(X, Y) - np.dot(Y, X)
+trNorm = lambda X: np.sqrt(np.trace(adj(X).dot(X)))
 
 def supOp(A, B, way, X):
     if(way == 'R'):
@@ -74,9 +75,9 @@ def tryGetBestSol(Q_, R_, way, guess):
             sol = np.random.rand(chi, chi) - .5
 
     print "SOL\n", sol
+    """
     guess = sol.reshape(chi * chi).real
 
-    """
     try:
         joke, sol = solveLinSys(Q_, R_, way, guess, 'bicgstab')
     except (ArpackError, ArpackNoConvergence):
@@ -163,7 +164,8 @@ def getQrhsQ(Q_, R_, way, rho_):
 
     energy = np.trace(ham.dot(rho_))
     rhs = ham - (energy * Id)
-    print "Energy density", energy
+    print "GDB: Energy density", trNorm(commQR), energy, trNorm(kinE), \
+        trNorm(potE), trNorm(intE)
 
     return rhs.reshape(chi * chi)
 
@@ -221,6 +223,8 @@ def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_):
     iContrib = w * (partOne + partTwo)
 
     Ystar_ = fContrib + kContrib + pContrib + iContrib
+    print "GDB: Y contrib", trNorm(fContrib), trNorm(kContrib), \
+        trNorm(pContrib), trNorm(iContrib)
     print "Ystar\n", Ystar_
 
     return Ystar_
@@ -229,15 +233,29 @@ def getUpdateVandW(R_, rhoSrI_, Ystar_):
     Vstar_ = - adj(R_).dot(Ystar_).dot(rhoSrI_)
     Wstar_ = Ystar_.dot(rhoSrI_)
     conver = np.sqrt(np.trace(adj(Ystar_).dot(Ystar_)))
-    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_, "\nConver", I, conver, dTau,
+    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_
+    print "GDB: conver", I, conver, dTau,
 
     return Vstar_, Wstar_
 
 def doUpdateQandR(K_, R_, Wstar_):
     tmp = adj(R_).dot(Wstar_) - adj(Wstar_).dot(R_)
 
-    R__ = R_ - dTau * Wstar_
-    K__ = K_ + .5 * dTau * tmp
+    chi, chi = K_.shape
+    rR = np.diag(np.random.rand(chi) - .5)
+    rR = rR / trNorm(rR)
+    rK = np.random.rand(chi, chi) - .5
+    rK = .5 * (rK - adj(rK))
+    rK = rK / trNorm(rK)
+
+    effUpK = .5 * dTau * tmp
+    effUpR = - dTau * Wstar_
+    giftK = dTau * trNorm(effUpK) / 2.#/ trNorm(rK)
+    giftR = dTau * trNorm(effUpR) / 2.#/ trNorm(rR)
+
+    K__ = K_ + effUpK + giftK * rK
+    R__ = R_ + effUpR + giftR * rR
+
     #Q__ = K__ - .5 * (adj(R__).dot(R__))
     #print "K\n", K__, "\nR\n", R__, "\nQ\n", Q__
 
@@ -255,10 +273,12 @@ def calcQuantities(Q_, R_, rho_, way):
 
     print "<n>", density, "e", eFixedN, 
     print "e/<n>^3", eFixedN/density**3, "g/<n>", w/density
+    print "GDB: ***"
 
 def evaluateStep(Ystar_, oldEta_, dTau_):
     newEta = np.sqrt(np.trace(adj(Ystar_).dot(Ystar_)))
-    if(newEta > oldEta_ and dTau_ > dTauMin): dTau_ = dTau_ / 1.001
+    ratio = oldEta_ / newEta
+    if(ratio < 1. and dTau_ > dTauMin): dTau_ = dTau_ * ratio / 1.001
     #if(I % 499 == 0 and newEta < oldEta_ and dTau_ < dTauMax): dTau_ = dTau_ * 1.001
 
     return newEta, dTau_
@@ -318,11 +338,12 @@ maxIter = 90000
 oldEta, dTau, dTauMin, dTauMax = 1.e9, .00125, 1.01e-4, 0.125
 K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
-R = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
+R = np.diag(1 * (np.random.rand(xi) - .5)) #+ 1j * np.zeros((xi, xi))
+R = R / trNorm(R)
 rho = fixPhase(np.random.rand(xi, xi) - .5)
 F = np.random.rand(xi, xi) - .5
 
-m, v, w = .5, -.5, 1.5
+m, v, w = .5, -.5, .5
 
 I, flag = 0, False
 while (not flag):#I != maxIter):
@@ -342,8 +363,8 @@ while (not flag):#I != maxIter):
     Vstar, Wstar = getUpdateVandW(R, rhoSrI, Ystar)
 
     calcQuantities(Q, R, rho, 'L')
-    onePartCorr(Q, R, rho)
-    rhoRhoCorr(Q, R, rho)
+    #onePartCorr(Q, R, rho)
+    #rhoRhoCorr(Q, R, rho)
 
     K, R = doUpdateQandR(K, R, Wstar)
 
