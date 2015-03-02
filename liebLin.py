@@ -112,7 +112,8 @@ def leftNormalization(K_, R_, guess):
 
     r_ = tryGetBestSol(Q_, R_, 'R', guess)
     r_ = fixPhase(r_)
-    print "r", np.trace(r_), "\n", r_
+    print "r", np.trace(r_), "\n", r_, "\n|| (l|T ||", \
+        trNorm(linOpForT(Q_, R_, 'L', np.eye(chi, chi)).reshape(chi, chi))
 
     return Q_, r_
 
@@ -238,26 +239,43 @@ def getUpdateVandW(R_, rhoSrI_, Ystar_):
 
     return Vstar_, Wstar_
 
-def doUpdateQandR(K_, R_, Wstar_):
-    tmp = adj(R_).dot(Wstar_) - adj(Wstar_).dot(R_)
+def doUpdateQandR(K_, R_, Wstar_, rho__, F__):
+    effUpK = - .5 * (adj(R_).dot(Wstar_) - adj(Wstar_).dot(R_))
+    effUpR = Wstar_
 
-    chi, chi = K_.shape
-    rR = np.diag(np.random.rand(chi) - .5)
-    rR = rR / trNorm(rR)
-    rK = np.random.rand(chi, chi) - .5
-    rK = .5 * (rK - adj(rK))
-    rK = rK / trNorm(rK)
+    K__ = K_ - .5 * dTau * effUpK
+    R__ = R_ - .5 * dTau * effUpR
 
-    effUpK = .5 * dTau * tmp
-    effUpR = - dTau * Wstar_
-    giftK = dTau * trNorm(effUpK) / 2.#/ trNorm(rK)
-    giftR = dTau * trNorm(effUpR) / 2.#/ trNorm(rR)
+    ldTau, lTol, lEta, zeta, J = dTau, 10 * expS, 1.e9, 1.e9, 0
+    while (zeta > lTol or J < 500):
+        Q__, rho__ = leftNormalization(K__, R__, rho__)
+        rhoI__, rhoSr__, rhoSrI__ = rhoVersions(rho__)
+        F__ = calcF(Q__, R__, 'L', rho__, F__)
+        Ystar__ = calcYstar(Q__, R__, F__, rho__, rhoI__, rhoSr__, rhoSrI__)
+        lEta, ldTau = evaluateStep(Ystar__, lEta, ldTau)
+        Vstar__, Wstar__ = getUpdateVandW(R__, rhoSrI__, Ystar__)
+        calcQuantities(Q__, R__, rho__, 'L')
 
-    K__ = K_ + effUpK + giftK * rK
-    R__ = R_ + effUpR + giftR * rR
+        effUpK__ = - .5 * (adj(R__).dot(Wstar__) - adj(Wstar__).dot(R__))
+        effUpR__ = Wstar__
+
+        dK__ = .5 * dTau * (effUpK - effUpK__)
+        dR__ = .5 * dTau * (effUpR - effUpR__)
+
+        K__ += dK__
+        R__ += dR__
+
+        effUpK, effUpR = effUpK__, effUpR__
+        zeta = np.sqrt(np.trace(supOp(dR__, dR__, 'R', rho__)))
+
+        print "GDB:", J, ldTau, "zeta", zeta, "|dR__|", trNorm(dR__), "\nGDB: ---"
+        J += 1
 
     #Q__ = K__ - .5 * (adj(R__).dot(R__))
     #print "K\n", K__, "\nR\n", R__, "\nQ\n", Q__
+
+    K__ = K__ - .5 * dTau * effUpK__
+    R__ = R__ - .5 * dTau * effUpR__
 
     return K__, R__
 
@@ -332,14 +350,14 @@ Main...
 """
 
 #np.random.seed(2)
-xi = 10
+xi = 31
 expS = 1.e-12
 maxIter = 90000
-oldEta, dTau, dTauMin, dTauMax = 1.e9, .00125, 1.01e-4, 0.125
+oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/10, 1.01e-4, 0.125
 K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
-R = np.diag(1 * (np.random.rand(xi) - .5)) #+ 1j * np.zeros((xi, xi))
-R = R / trNorm(R)
+R = (1 * (np.random.rand(xi, xi) - .5)) #+ 1j * np.zeros((xi, xi))
+#R = R / trNorm(R)
 rho = fixPhase(np.random.rand(xi, xi) - .5)
 F = np.random.rand(xi, xi) - .5
 
@@ -347,7 +365,7 @@ m, v, w = .5, -.5, .5
 
 I, flag = 0, False
 while (not flag):#I != maxIter):
-    print "\t\t\t\t\t\t\t############# ITERATION", I, "#############"
+    print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
 
     Q, rho = leftNormalization(K, R, rho)
     #Q, rho = rightNormalization(K, R, ...)
@@ -366,7 +384,7 @@ while (not flag):#I != maxIter):
     #onePartCorr(Q, R, rho)
     #rhoRhoCorr(Q, R, rho)
 
-    K, R = doUpdateQandR(K, R, Wstar)
+    K, R = doUpdateQandR(K, R, Wstar, rho, F)
 
     I += 1
 
