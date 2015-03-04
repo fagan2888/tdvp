@@ -62,6 +62,7 @@ def tryGetBestSol(Q_, R_, way, guess):
     #print "GUESS\n", guess
     guess = guess.reshape(chi * chi)
 
+    """
     try:
         joke, sol = getLargestW(Q_, R_, way, 'SM', guess)
     except:
@@ -73,11 +74,7 @@ def tryGetBestSol(Q_, R_, way, guess):
         except:
             print "getLargestW: eigs failed, trying bicgstab"
             sol = np.random.rand(chi, chi) - .5
-
-    print "SOL\n", sol
     """
-    guess = sol.reshape(chi * chi).real
-
     try:
         joke, sol = solveLinSys(Q_, R_, way, guess, 'bicgstab')
     except (ArpackError, ArpackNoConvergence):
@@ -89,7 +86,10 @@ def tryGetBestSol(Q_, R_, way, guess):
         except (ArpackError, ArpackNoConvergence):
             print "solveLinSys: gmres failed, lame solution"
             sol = 0.5 * (sol + guess)
-    """
+
+    print "SOL\n", sol, "\n(l|T", \
+        trNorm(linOpForT(Q_, R_, 'L', np.eye(chi, chi)).reshape(chi, chi)), \
+        "T|r)", trNorm(linOpForT(Q_, R_, 'R', sol.real).reshape(chi, chi))
 
     return sol.real
 
@@ -112,8 +112,7 @@ def leftNormalization(K_, R_, guess):
 
     r_ = tryGetBestSol(Q_, R_, 'R', guess)
     r_ = fixPhase(r_)
-    print "r", np.trace(r_), "\n", r_, "\n|| (l|T ||", \
-        trNorm(linOpForT(Q_, R_, 'L', np.eye(chi, chi)).reshape(chi, chi))
+    print "r", np.trace(r_), "\n", r_
 
     return Q_, r_
 
@@ -247,7 +246,7 @@ def doUpdateQandR(K_, R_, Wstar_, rho__, F__):
     R__ = R_ - .5 * dTau * effUpR
 
     ldTau, lTol, lEta, zeta, J = dTau, 10 * expS, 1.e9, 1.e9, 0
-    while (zeta > lTol or J < 500):
+    while (zeta > lTol and J < 500):
         Q__, rho__ = leftNormalization(K__, R__, rho__)
         rhoI__, rhoSr__, rhoSrI__ = rhoVersions(rho__)
         F__ = calcF(Q__, R__, 'L', rho__, F__)
@@ -350,7 +349,7 @@ Main...
 """
 
 #np.random.seed(2)
-xi = 31
+xi = 41
 expS = 1.e-12
 maxIter = 90000
 oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/10, 1.01e-4, 0.125
