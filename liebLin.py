@@ -245,8 +245,8 @@ def doUpdateQandR(K_, R_, Wstar_, rho__, F__):
     K__ = K_ - .5 * dTau * effUpK
     R__ = R_ - .5 * dTau * effUpR
 
-    ldTau, lTol, lEta, zeta, J = dTau, 10 * expS, 1.e9, 1.e9, 0
-    while (zeta > lTol and J < 500):
+    ldTau, lTol, lEta, zeta, J = dTau, expS, 1.e9, 1.e9, 0
+    while (zeta > lTol and J < 100):
         Q__, rho__ = leftNormalization(K__, R__, rho__)
         rhoI__, rhoSr__, rhoSrI__ = rhoVersions(rho__)
         F__ = calcF(Q__, R__, 'L', rho__, F__)
@@ -296,7 +296,8 @@ def evaluateStep(Ystar_, oldEta_, dTau_):
     newEta = np.sqrt(np.trace(adj(Ystar_).dot(Ystar_)))
     ratio = oldEta_ / newEta
     if(ratio < 1. and dTau_ > dTauMin): dTau_ = dTau_ * ratio / 1.001
-    #if(I % 499 == 0 and newEta < oldEta_ and dTau_ < dTauMax): dTau_ = dTau_ * 1.001
+    if(ratio > 1. and dTau_ < dTauMax and \
+           newEta < .1 and I % 50 == 0): dTau_ = dTau_ * 1.001
 
     return newEta, dTau_
 
@@ -349,7 +350,7 @@ Main...
 """
 
 #np.random.seed(2)
-xi = 41
+xi = 21
 expS = 1.e-12
 maxIter = 90000
 oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/10, 1.01e-4, 0.125
@@ -360,7 +361,7 @@ R = (1 * (np.random.rand(xi, xi) - .5)) #+ 1j * np.zeros((xi, xi))
 rho = fixPhase(np.random.rand(xi, xi) - .5)
 F = np.random.rand(xi, xi) - .5
 
-m, v, w = .5, -.5, .5
+m, v, w = .5, -.5, 10.
 
 I, flag = 0, False
 while (not flag):#I != maxIter):
