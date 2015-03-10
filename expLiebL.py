@@ -12,6 +12,7 @@ import functools
 
 adj = lambda X: np.transpose(np.conjugate(X))
 comm = lambda X, Y: np.dot(X, Y) - np.dot(Y, X)
+trNorm = lambda X: np.sqrt(np.trace(adj(X).dot(X)))
 
 def supOp(A, B, way, X):
     if(way == 'R'):
@@ -61,6 +62,7 @@ def tryGetBestSol(Q_, R_, way, guess):
     #print "GUESS\n", guess
     guess = guess.reshape(chi * chi)
 
+    """
     try:
         joke, sol = getLargestW(Q_, R_, way, 'SM', guess)
     except:
@@ -72,10 +74,6 @@ def tryGetBestSol(Q_, R_, way, guess):
         except:
             print "getLargestW: eigs failed, trying bicgstab"
             sol = np.random.rand(chi, chi) - .5
-
-    print "SOL\n", sol
-    guess = sol.reshape(chi * chi).real
-
     """
     try:
         joke, sol = solveLinSys(Q_, R_, way, guess, 'bicgstab')
@@ -88,7 +86,10 @@ def tryGetBestSol(Q_, R_, way, guess):
         except (ArpackError, ArpackNoConvergence):
             print "solveLinSys: gmres failed, lame solution"
             sol = 0.5 * (sol + guess)
-    """
+
+    print "SOL\n", sol, "\n(l|T", \
+        trNorm(linOpForT(Q_, R_, 'L', np.eye(chi, chi)).reshape(chi, chi)), \
+        "T|r)", trNorm(linOpForT(Q_, R_, 'R', sol.real).reshape(chi, chi))
 
     return sol.real
 
@@ -163,7 +164,8 @@ def getQrhsQ(Q_, R_, way, rho_, muL_):
 
     energy = np.trace(ham.dot(rho_))
     rhs = ham - (energy * Id)
-    print "Energy density", energy
+    print "GDB: Energy density", trNorm(commQR), energy, trNorm(kinE), \
+        trNorm(potE), trNorm(intE)
 
     return rhs.reshape(chi * chi)
 
@@ -226,6 +228,8 @@ def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_, muL_, muR_):
     lrContrib = w * (partOne + partTwo)
 
     Ystar_ = fContrib + kContrib + pContrib + iContrib + lrContrib
+    print "GDB: Y contrib", trNorm(fContrib), trNorm(kContrib), \
+        trNorm(pContrib), trNorm(iContrib), trNorm(lrContrib)
     print "Ystar\n", Ystar_
 
     return Ystar_
@@ -234,17 +238,49 @@ def getUpdateVandW(R_, rhoSrI_, Ystar_):
     Vstar_ = - adj(R_).dot(Ystar_).dot(rhoSrI_)
     Wstar_ = Ystar_.dot(rhoSrI_)
     conver = np.sqrt(np.trace(adj(Ystar_).dot(Ystar_)))
-    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_, "\nConver", I, conver, dTau,
+    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_
+    print "GDB: conver", I, conver, dTau,
 
     return Vstar_, Wstar_
 
-def doUpdateQandR(K_, R_, Wstar_):
-    tmp = adj(R_).dot(Wstar_) - adj(Wstar_).dot(R_)
+def doUpdateQandR(K_, R_, Wstar_, rho__, F__, muL__, muR__):
+    effUpK = - .5 * (adj(R_).dot(Wstar_) - adj(Wstar_).dot(R_))
+    effUpR = Wstar_
 
-    R__ = R_ - dTau * Wstar_
-    K__ = K_ + .5 * dTau * tmp
+    K__ = K_ - .5 * dTau * effUpK
+    R__ = R_ - .5 * dTau * effUpR
+
+    ldTau, lTol, lEta, zeta, J = dTau, expS, 1.e9, 1.e9, 0
+    while (zeta > lTol and J < 100):
+        Q__, rho__ = leftNormalization(K__, R__, rho__)
+        rhoI__, rhoSr__, rhoSrI__ = rhoVersions(rho__)
+        muL__, muR__ = calcMuS(Q, R, rho, muL__, muR__)
+        F__ = calcF(Q__, R__, 'L', rho__, muL__, F__)
+        Ystar__ = calcYstar(Q__, R__, F__, rho__, rhoI__, rhoSr__, rhoSrI__, muL__, muR__)
+        lEta, ldTau = evaluateStep(Ystar__, lEta, ldTau)
+        Vstar__, Wstar__ = getUpdateVandW(R__, rhoSrI__, Ystar__)
+        calcQuantities(Q__, R__, rho__, 'L')
+
+        effUpK__ = - .5 * (adj(R__).dot(Wstar__) - adj(Wstar__).dot(R__))
+        effUpR__ = Wstar__
+
+        dK__ = .5 * dTau * (effUpK - effUpK__)
+        dR__ = .5 * dTau * (effUpR - effUpR__)
+
+        K__ += dK__
+        R__ += dR__
+
+        effUpK, effUpR = effUpK__, effUpR__
+        zeta = np.sqrt(np.trace(supOp(dR__, dR__, 'R', rho__)))
+
+        print "GDB:", J, ldTau, "zeta", zeta, "|dR__|", trNorm(dR__), "\nGDB: ---"
+        J += 1
+
     #Q__ = K__ - .5 * (adj(R__).dot(R__))
     #print "K\n", K__, "\nR\n", R__, "\nQ\n", Q__
+
+    K__ = K__ - .5 * dTau * effUpK__
+    R__ = R__ - .5 * dTau * effUpR__
 
     return K__, R__
 
@@ -260,11 +296,14 @@ def calcQuantities(Q_, R_, rho_, way):
 
     print "<n>", density, "e", eFixedN, 
     print "e/<n>^3", eFixedN/density**3, "g/<n>", w/density
+    print "GDB: ***"
 
 def evaluateStep(Ystar_, oldEta_, dTau_):
     newEta = np.sqrt(np.trace(adj(Ystar_).dot(Ystar_)))
-    if(newEta > oldEta_ and dTau_ > dTauMin): dTau_ = dTau_ / 1.001
-    #if(I % 499 == 0 and newEta < oldEta_ and dTau_ < dTauMax): dTau_ = dTau_ * 1.001
+    ratio = oldEta_ / newEta
+    if(ratio < 1. and dTau_ > dTauMin): dTau_ = dTau_ * ratio / 1.001
+    if(ratio > 1. and dTau_ < dTauMax and \
+           newEta < .1 and I % 50 == 0): dTau_ = dTau_ * 1.001
 
     return newEta, dTau_
 
@@ -308,7 +347,8 @@ def rhoRhoCorr(Q_, R_, rho_):
 
     corr = [bra[i].dot(ket) for i in range(len(x))]
     corr = np.array(map(np.trace, corr))
-    print "bra", bra.shape, x.shape, corr.shape, "\ncorr\n", corr
+    print "bra", bra.shape, x.shape, corr.shape, "\ncorr\n", \
+        '\n'.join(map(str, corr))
 
 def linOpForExp(Q_, R_, way, X):
     chi, chi = Q_.shape
@@ -354,13 +394,14 @@ Main...
 """
 
 #np.random.seed(2)
-xi = 10
+xi = 21
 expS = 1.e-12
 maxIter = 90000
-oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/2., 1.01e-4, .125
+oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/10, 1.01e-4, 0.125
 K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
 K = .5 * (K - adj(K))
-R = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
+R = (1 * (np.random.rand(xi, xi) - .5)) #+ 1j * np.zeros((xi, xi))
+#R = R / trNorm(R)
 rho = fixPhase(np.random.rand(xi, xi) - .5)
 F = np.random.rand(xi, xi) - .5
 muL = (np.random.rand(xi, xi) - .5)
@@ -368,9 +409,9 @@ muR = (np.random.rand(xi, xi) - .5)
 
 m, v, w, mu = .5, -.5, 21., 4.
 
-I, flag = 0, False
+I, flag, measCorr = 0, False, 1.e-1
 while (not flag):#I != maxIter):
-    print "\t\t\t\t\t\t\t############# ITERATION", I, "#############"
+    print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
 
     Q, rho = leftNormalization(K, R, rho)
     #Q, rho = rightNormalization(K, R, ...)
@@ -388,10 +429,13 @@ while (not flag):#I != maxIter):
     Vstar, Wstar = getUpdateVandW(R, rhoSrI, Ystar)
 
     calcQuantities(Q, R, rho, 'L')
-    onePartCorr(Q, R, rho)
-    rhoRhoCorr(Q, R, rho)
 
-    K, R = doUpdateQandR(K, R, Wstar)
+    if(oldEta < measCorr):
+        onePartCorr(Q, R, rho)
+        rhoRhoCorr(Q, R, rho)
+        measCorr /= 10
+
+    K, R = doUpdateQandR(K, R, Wstar, rho, F, muL, muR)
 
     I += 1
 
