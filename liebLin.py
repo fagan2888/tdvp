@@ -341,7 +341,8 @@ def rhoRhoCorr(Q_, R_, rho_):
 
     corr = [bra[i].dot(ket) for i in range(len(x))]
     corr = np.array(map(np.trace, corr))
-    print "bra", bra.shape, x.shape, corr.shape, "\ncorr\n", corr
+    print "bra", bra.shape, x.shape, corr.shape, "\ncorr\n", \
+        '\n'.join(map(str, corr))
 
 
 
@@ -363,7 +364,7 @@ F = np.random.rand(xi, xi) - .5
 
 m, v, w = .5, -.5, 10.
 
-I, flag = 0, False
+I, flag, measCorr = 0, False, 1.e-1
 while (not flag):#I != maxIter):
     print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
 
@@ -381,8 +382,11 @@ while (not flag):#I != maxIter):
     Vstar, Wstar = getUpdateVandW(R, rhoSrI, Ystar)
 
     calcQuantities(Q, R, rho, 'L')
-    #onePartCorr(Q, R, rho)
-    #rhoRhoCorr(Q, R, rho)
+
+    if(oldEta < measCorr):
+        onePartCorr(Q, R, rho)
+        rhoRhoCorr(Q, R, rho)
+        measCorr /= 10
 
     K, R = doUpdateQandR(K, R, Wstar, rho, F)
 
