@@ -295,9 +295,9 @@ def calcQuantities(Q_, R_, rho_, way):
 def evaluateStep(Ystar_, oldEta_, dTau_):
     newEta = np.sqrt(np.trace(adj(Ystar_).dot(Ystar_)))
     ratio = oldEta_ / newEta
-    if(ratio < 1. and dTau_ > dTauMin): dTau_ = dTau_ * ratio / 1.001
+    if(ratio < 1. and dTau_ > dTauMin): dTau_ = dTau_ * ratio / 1.005
     if(ratio > 1. and dTau_ < dTauMax and \
-           newEta < .1 and I % 50 == 0): dTau_ = dTau_ * 1.001
+           newEta < .1 and I % 50 == 0): dTau_ = dTau_ * ratio * 1.005
 
     return newEta, dTau_
 
