@@ -87,7 +87,8 @@ def tryGetBestSol(Q_, R_, way, guess):
             print "solveLinSys: gmres failed, lame solution"
             sol = 0.5 * (sol + guess)
 
-    print "SOL\n", sol, "\n(l|T", \
+    #print "SOL\n", sol, 
+    print "\n(l|T", \
         trNorm(linOpForT(Q_, R_, 'L', np.eye(chi, chi)).reshape(chi, chi)), \
         "T|r)", trNorm(linOpForT(Q_, R_, 'R', sol.real).reshape(chi, chi))
 
@@ -103,7 +104,7 @@ def fixPhase(X):
 def leftNormalization(K_, R_, guess):
     chi, chi = K_.shape
     Q_ = K_ - .5 * (adj(R_).dot(R_))
-    print "K\n", K_, "\nR\n", R_, "\nQ\n", Q_
+    #print "K\n", K_, "\nR\n", R_, "\nQ\n", Q_
 
     #l_ = tryGetBestSol(Q_, R_, 'L', guess)
     #l_ = fixPhase(l_)
@@ -112,7 +113,7 @@ def leftNormalization(K_, R_, guess):
 
     r_ = tryGetBestSol(Q_, R_, 'R', guess)
     r_ = fixPhase(r_)
-    print "r", np.trace(r_), "\n", r_
+    #print "r", np.trace(r_), "\n", r_
 
     return Q_, r_
 
@@ -133,22 +134,22 @@ def rightNormalization(K_, R_):
 
 def rhoVersions(rho_):
     eval_, evec_ = spla.eigh(rho_)
-    print "lambda", reduce(lambda x, y: x+y, eval_), eval_
+    #print "lambda", reduce(lambda x, y: x+y, eval_), eval_
 
     eval_ = abs(eval_)
     evalI = 1. / eval_
     evalSr = np.sqrt(eval_)
     evalSrI = 1. / np.sqrt(eval_)
-    print "evalI  ", evalI, "\nevalSr ", evalSr, "\nevalSrI", evalSrI
+    #print "evalI  ", evalI, "\nevalSr ", evalSr, "\nevalSrI", evalSrI
 
     ULUd = evec_.dot(np.diag(eval_)).dot(adj(evec_))
-    print "r - UdU+\n", rho_ - ULUd
+    #print "r - UdU+\n", rho_ - ULUd
 
     rhoI_ = evec_.dot(np.diag(evalI)).dot(adj(evec_))
     rhoSr_ = evec_.dot(np.diag(evalSr)).dot(adj(evec_))
     rhoSrI_ = evec_.dot(np.diag(evalSrI)).dot(adj(evec_))
-    print "rr^-1\n", rho_.dot(rhoI_)
-    print "rSrrSr^-1\n", rhoSr_.dot(rhoSrI_)
+    #print "rr^-1\n", rho_.dot(rhoI_)
+    #print "rSrrSr^-1\n", rhoSr_.dot(rhoSrI_)
 
     return rhoI_, rhoSr_, rhoSrI_
 
@@ -203,7 +204,7 @@ def calcF(Q_, R_, way, rho_, guess):
             print "calcF: gmres failed, taking lame solution\n"
             F = F if info > 0 else guess
 
-    print "F\n", F.reshape(chi, chi)
+    #print "F\n", F.reshape(chi, chi)
     return F.reshape(chi, chi)
 
 def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_):
@@ -225,7 +226,7 @@ def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_):
     Ystar_ = fContrib + kContrib + pContrib + iContrib
     print "GDB: Y contrib", trNorm(fContrib), trNorm(kContrib), \
         trNorm(pContrib), trNorm(iContrib)
-    print "Ystar\n", Ystar_
+    #print "Ystar\n", Ystar_
 
     return Ystar_
 
@@ -233,7 +234,7 @@ def getUpdateVandW(R_, rhoSrI_, Ystar_):
     Vstar_ = - adj(R_).dot(Ystar_).dot(rhoSrI_)
     Wstar_ = Ystar_.dot(rhoSrI_)
     conver = np.sqrt(np.trace(adj(Ystar_).dot(Ystar_)))
-    print "Vstar\n", Vstar_, "\nWstar\n", Wstar_
+    #print "Vstar\n", Vstar_, "\nWstar\n", Wstar_
     print "GDB: conver", I, conver, dTau,
 
     return Vstar_, Wstar_
@@ -246,7 +247,7 @@ def doUpdateQandR(K_, R_, Wstar_, rho__, F__):
     R__ = R_ - .5 * dTau * effUpR
 
     ldTau, lTol, lEta, zeta, J = dTau, expS, 1.e9, 1.e9, 0
-    while (zeta > lTol and J < 100):
+    while (zeta > lTol and J < 30):
         Q__, rho__ = leftNormalization(K__, R__, rho__)
         rhoI__, rhoSr__, rhoSrI__ = rhoVersions(rho__)
         F__ = calcF(Q__, R__, 'L', rho__, F__)
@@ -295,9 +296,9 @@ def calcQuantities(Q_, R_, rho_, way):
 def evaluateStep(Ystar_, oldEta_, dTau_):
     newEta = np.sqrt(np.trace(adj(Ystar_).dot(Ystar_)))
     ratio = oldEta_ / newEta
-    if(ratio < 1. and dTau_ > dTauMin): dTau_ = dTau_ * ratio / 1.005
+    if(ratio < 1. and dTau_ > dTauMin): dTau_ = dTau_ * ratio / 1.001
     if(ratio > 1. and dTau_ < dTauMax and \
-           newEta < .1 and I % 50 == 0): dTau_ = dTau_ * ratio * 1.005
+           I != 0 and I % 100 == 0): dTau_ = dTau_ * ratio * 1.005
 
     return newEta, dTau_
 
@@ -313,7 +314,7 @@ def onePartCorr(Q_, R_, rho_):
     l0 = supOp(R_, Id, 'L', Id).reshape(chi * chi)
 
     n = np.trace(l0.reshape(chi, chi).dot(ket))
-    print "init cond", n
+    print "#init cond", n
 
     bra = spig.odeint(linOpForOde, l0, x, args = (Q_, R_, 'L'), rtol = expS, 
                       atol = expS)
@@ -321,7 +322,7 @@ def onePartCorr(Q_, R_, rho_):
 
     corr = [bra[i].dot(ket) for i in range(len(x))]
     corr = np.array(map(np.trace, corr)) / n
-    print "bra", bra.shape, x.shape, corr.shape, "\ncorr\n", \
+    print "#bra", bra.shape, x.shape, corr.shape, "\n#corr\n", \
         '\n'.join(map(str, corr))
 
 def rhoRhoCorr(Q_, R_, rho_):
@@ -333,7 +334,7 @@ def rhoRhoCorr(Q_, R_, rho_):
     l0 = supOp(R_, R_, 'L', Id).reshape(chi * chi)
 
     n = np.trace(l0.reshape(chi, chi).dot(ket))
-    print "init cond", n
+    print "\n#init cond", n
 
     bra = spig.odeint(linOpForOde, l0, x, args = (Q_, R_, 'L'), rtol = expS, 
                       atol = expS)
@@ -341,8 +342,48 @@ def rhoRhoCorr(Q_, R_, rho_):
 
     corr = [bra[i].dot(ket) for i in range(len(x))]
     corr = np.array(map(np.trace, corr))
-    print "bra", bra.shape, x.shape, corr.shape, "\ncorr\n", \
+    print "#bra", bra.shape, x.shape, corr.shape, "\n#corr\n", \
         '\n'.join(map(str, corr))
+
+def writeFiles(K_, R_):
+    aux = "xi" + str(xi) + "w" + str(w)
+    np.save('K_' + aux, K_)
+    np.save('R_' + aux, R_)
+
+def readFiles(chi__):
+    K__ = np.random.rand(chi__, chi__) - .5
+    R__ = np.random.rand(chi__, chi__) - .5
+    rho__ = fixPhase(np.random.rand(chi__, chi__) - .5)
+    F__ = np.random.rand(chi__, chi__) - .5
+
+    try:
+        K_ = np.load('K_.npy')
+    except IOError:
+        K_ = K__
+    try:
+        R_ = np.load('R_.npy')
+    except IOError:
+        R_ = R__
+
+    chi_, chi_ = K_.shape
+    if(K_.shape < K__.shape):
+        print "Expanding", chi_, "->", chi__
+        K__[:chi_, :chi_] = K_
+        R__[:chi_, :chi_] = R_
+    elif(K_.shape > K__.shape):
+        print "Shrinking", chi_, "->", chi__
+        K__ = K_[:chi__, :chi__]
+        R__ = R_[:chi__, :chi__]
+    else:
+        print "Equating", chi_, "==", chi__
+        K__ = K_
+        R__ = R_
+
+    K__ = .5 * (K__ - adj(K__))
+    print "K_\n", K_, "\nK__\n", K__
+    print "R_\n", R_, "\nR__\n", R__
+
+    return K__, R__, rho__, F__
 
 
 
@@ -351,22 +392,16 @@ Main...
 """
 
 #np.random.seed(2)
-xi = 21
-expS = 1.e-12
-maxIter = 90000
-oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/10, 1.01e-4, 0.125
-K = 1 * (np.random.rand(xi, xi) - .5) #+ 1j * np.zeros((xi, xi))
-K = .5 * (K - adj(K))
-R = (1 * (np.random.rand(xi, xi) - .5)) #+ 1j * np.zeros((xi, xi))
-#R = R / trNorm(R)
-rho = fixPhase(np.random.rand(xi, xi) - .5)
-F = np.random.rand(xi, xi) - .5
+maxIter, expS, xi = 90000, 1.e-12, 16
+oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/15, 1.e-3, 0.125
+K, R, rho, F = readFiles(xi)
 
-m, v, w = .5, -.5, 10.
+m, v, w = .5, -.5, 21.
 
 I, flag, measCorr = 0, False, 1.e-1
 while (not flag):#I != maxIter):
     print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
+    if(I % 1000 == 0): print "xi", xi, "v", v, "w", w
 
     Q, rho = leftNormalization(K, R, rho)
     #Q, rho = rightNormalization(K, R, ...)
@@ -386,6 +421,7 @@ while (not flag):#I != maxIter):
     if(oldEta < measCorr):
         onePartCorr(Q, R, rho)
         rhoRhoCorr(Q, R, rho)
+        writeFiles(K, R)
         measCorr /= 10
 
     K, R = doUpdateQandR(K, R, Wstar, rho, F)
