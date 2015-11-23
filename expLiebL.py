@@ -304,7 +304,7 @@ def evaluateStep(Ystar_, oldEta_, dTau_):
     ratio = oldEta_ / newEta
     if(ratio < 1. and dTau_ > dTauMin): dTau_ = dTau_ * ratio / 1.001
     if(ratio > 1. and dTau_ < dTauMax and \
-           I != 0 and I % 100 == 0): dTau_ = dTau_ * ratio * 1.005
+           I != 0 and I % 100 == 0): dTau_ = dTau_ * ratio * 1.001
 
     return newEta, dTau_
 
@@ -314,7 +314,7 @@ def linOpForOde(X, x, Q_, R_, way):
 def onePartCorr(Q_, R_, rho_):
     chi, chi = Q_.shape
     Id = np.eye(chi, chi)
-    x = np.linspace(0, 50, 150)
+    x = np.linspace(0, 100, 300)
 
     ket = supOp(Id, R_, 'R', rho_)
     l0 = supOp(R_, Id, 'L', Id).reshape(chi * chi)
@@ -334,7 +334,7 @@ def onePartCorr(Q_, R_, rho_):
 def rhoRhoCorr(Q_, R_, rho_):
     chi, chi = Q_.shape
     Id = np.eye(chi, chi)
-    x = np.linspace(0, 50, 150)
+    x = np.linspace(0, 100, 300)
 
     ket = supOp(R_, R_, 'R', rho_)
     l0 = supOp(R_, R_, 'L', Id).reshape(chi * chi)
@@ -437,11 +437,11 @@ Main...
 """
 
 #np.random.seed(2)
-maxIter, expS, xi = 90000, 1.e-12, 4
-oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/20, 1.e-3, 0.125
+maxIter, expS, xi = 90000, 1.e-12, 24
+oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/50, 1.e-3, 0.125
 K, R, rho, F, muL, muR = readFiles(xi)
 
-m, v, w, mu = .5, -.5, .1, .125
+m, v, w, mu = .5, -.5, 1., 4.
 
 I, flag, measCorr = 0, False, 1.e-1
 while (not flag):#I != maxIter):

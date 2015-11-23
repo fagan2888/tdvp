@@ -62,7 +62,6 @@ def tryGetBestSol(Q_, R_, way, guess):
     #print "GUESS\n", guess
     guess = guess.reshape(chi * chi)
 
-    """
     try:
         joke, sol = getLargestW(Q_, R_, way, 'SM', guess)
     except:
@@ -86,6 +85,7 @@ def tryGetBestSol(Q_, R_, way, guess):
         except (ArpackError, ArpackNoConvergence):
             print "solveLinSys: gmres failed, lame solution"
             sol = 0.5 * (sol + guess)
+    """
 
     #print "SOL\n", sol, 
     print "\n(l|T", \
@@ -247,7 +247,7 @@ def doUpdateQandR(K_, R_, Wstar_, rho__, F__):
     R__ = R_ - .5 * dTau * effUpR
 
     ldTau, lTol, lEta, zeta, J = dTau, expS, 1.e9, 1.e9, 0
-    while (zeta > lTol and J < 30):
+    while (zeta > lTol and J < 5):
         Q__, rho__ = leftNormalization(K__, R__, rho__)
         rhoI__, rhoSr__, rhoSrI__ = rhoVersions(rho__)
         F__ = calcF(Q__, R__, 'L', rho__, F__)
@@ -288,9 +288,11 @@ def calcQuantities(Q_, R_, rho_, way):
     density = np.trace(supOp(R_, R_, way, rho_))
     eFixedN = np.trace(supOp(tmp, tmp, way, rho_) / (2. * m) 
                        + w * supOp(RR, RR, way, rho_))
+    eFixedN2 = np.trace(supOp(tmp, tmp, way, rho_) / (2. * m) 
+                       + .5 * w * supOp(RR, RR, way, rho_))
 
     print "<n>", density, "e", eFixedN, 
-    print "e/<n>^3", eFixedN/density**3, "g/<n>", w/density
+    print "e/<n>^3", eFixedN/density**3, eFixedN2/density**3, "g/<n>", w/density
     print "GDB: ***"
 
 def evaluateStep(Ystar_, oldEta_, dTau_):
@@ -308,7 +310,7 @@ def linOpForOde(X, x, Q_, R_, way):
 def onePartCorr(Q_, R_, rho_):
     chi, chi = Q_.shape
     Id = np.eye(chi, chi)
-    x = np.linspace(0, 50, 150)
+    x = np.linspace(0, 100, 300)
 
     ket = supOp(Id, R_, 'R', rho_)
     l0 = supOp(R_, Id, 'L', Id).reshape(chi * chi)
@@ -328,7 +330,7 @@ def onePartCorr(Q_, R_, rho_):
 def rhoRhoCorr(Q_, R_, rho_):
     chi, chi = Q_.shape
     Id = np.eye(chi, chi)
-    x = np.linspace(0, 50, 150)
+    x = np.linspace(0, 100, 300)
 
     ket = supOp(R_, R_, 'R', rho_)
     l0 = supOp(R_, R_, 'L', Id).reshape(chi * chi)
@@ -392,11 +394,11 @@ Main...
 """
 
 #np.random.seed(2)
-maxIter, expS, xi = 90000, 1.e-12, 16
-oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/15, 1.e-3, 0.125
+maxIter, expS, xi = 90000, 1.e-12, 2
+oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/20, 1.e-3, 0.125
 K, R, rho, F = readFiles(xi)
 
-m, v, w = .5, -.5, 21.
+m, v, w = .5, -.5, 1.
 
 I, flag, measCorr = 0, False, 1.e-1
 while (not flag):#I != maxIter):
