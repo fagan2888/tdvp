@@ -161,14 +161,12 @@ def getQrhsQ(Q_, R_, way, rho_):
     kinE = 1./(2. * m) * supOp(commQR, commQR, way, Id)
     potE = v * supOp(R_, R_, way, Id)
     intE = w * supOp(R_, R_, way, supOp(R_, R_, way, Id))#supOp(RR, RR, way, Id)
-    binE = u * supOp(R_, Id, way, supOp(R_, Id, way, Id)) + \
-           u * supOp(Id, R_, way, supOp(Id, R_, way, Id))
-    ham = kinE + potE + intE + binE
+    ham = kinE + potE + intE
 
     energy = np.trace(ham.dot(rho_))
     rhs = ham - (energy * Id)
     print "GDB: Energy density", trNorm(commQR), energy, trNorm(kinE), \
-        trNorm(potE), trNorm(intE), trNorm(binE)
+        trNorm(potE), trNorm(intE)
 
     return rhs.reshape(chi * chi)
 
@@ -225,14 +223,9 @@ def calcYstar(Q_, R_, F_, rho_, rhoI_, rhoSr_, rhoSrI_):
 
     iContrib = w * (partOne + partTwo)
 
-    partOne = rho_.dot(adj(R_)).dot(rhoSrI_)
-    partTwo = adj(R_).dot(rhoSr_)
-
-    bContrib = u * (partOne + partTwo)
-
-    Ystar_ = fContrib + kContrib + pContrib + iContrib + bContrib
+    Ystar_ = fContrib + kContrib + pContrib + iContrib
     print "GDB: Y contrib", trNorm(fContrib), trNorm(kContrib), \
-        trNorm(pContrib), trNorm(iContrib), trNorm(bContrib)
+        trNorm(pContrib), trNorm(iContrib)
     #print "Ystar\n", Ystar_
 
     return Ystar_
@@ -287,20 +280,16 @@ def doUpdateQandR(K_, R_, Wstar_, rho__, F__):
     return K__, R__
 
 def calcQuantities(Q_, R_, rho_, way):
-    chi, chi = Q_.shape
     tmp = comm(Q_, R_)
     RR = R_.dot(R_)
-    Id = np.eye(chi, chi)
     #if(way == 'L'): way = 'R' else: way = 'L'
     way = 'R' if way == 'L' else 'L'
 
     density = np.trace(supOp(R_, R_, way, rho_))
-    eFixedN = np.trace(supOp(tmp, tmp, way, rho_) / (2. * m) \
-                       + w * supOp(RR, RR, way, rho_) \
-                       + u * supOp(RR, Id, way, rho_) + u * supOp(Id, RR, way, rho_))
-    eFixedN2 = np.trace(supOp(tmp, tmp, way, rho_) / (2. * m) \
-                        + .5 * w * supOp(RR, RR, way, rho_) \
-                        + u * supOp(RR, Id, way, rho_) + u * supOp(Id, RR, way, rho_))
+    eFixedN = np.trace(supOp(tmp, tmp, way, rho_) / (2. * m) 
+                       + w * supOp(RR, RR, way, rho_))
+    eFixedN2 = np.trace(supOp(tmp, tmp, way, rho_) / (2. * m) 
+                       + .5 * w * supOp(RR, RR, way, rho_))
 
     print "<n>", density, "e", eFixedN, 
     print "e/<n>^3", eFixedN/density**3, eFixedN2/density**3, "g/<n>", w/density
@@ -364,8 +353,8 @@ def writeFiles(K_, R_):
     np.save('R_' + aux, R_)
 
 def readFiles(chi__):
-    K__ = .5 * (np.random.rand(chi__, chi__) - .5)
-    R__ = .5 * (np.random.rand(chi__, chi__) - .5)
+    K__ = np.random.rand(chi__, chi__) - .5
+    R__ = np.random.rand(chi__, chi__) - .5
     rho__ = fixPhase(np.random.rand(chi__, chi__) - .5)
     F__ = np.random.rand(chi__, chi__) - .5
 
@@ -405,16 +394,16 @@ Main...
 """
 
 #np.random.seed(2)
-maxIter, expS, xi = 90000, 1.e-12, 10
-oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/90, 1.e-3, 0.125
+maxIter, expS, xi = 90000, 1.e-12, 2
+oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/20, 1.e-3, 0.125
 K, R, rho, F = readFiles(xi)
 
-m, v, w, u = .5, 1., .2, -.4
+m, v, w = .5, -.5, 1.
 
 I, flag, measCorr = 0, False, 1.e-1
 while (not flag):#I != maxIter):
     print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
-    if(I % 1000 == 0): print "xi", xi, "v", v, "w", w, "u", u
+    if(I % 1000 == 0): print "xi", xi, "v", v, "w", w
 
     Q, rho = leftNormalization(K, R, rho)
     #Q, rho = rightNormalization(K, R, ...)
