@@ -69,7 +69,7 @@ def getLargestW(MPS, dir):
                                          matvec = linOpWrapped)
                                          #dtype = 'complex128')
     omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = expS, 
-                           maxiter = maxIter)
+                           maxiter = maxIter, ncv = 12)
     X = X.reshape(chir, chic)
 
     return omega, X
@@ -132,9 +132,19 @@ def buildLocalH():
     The local H is a (d, d, d, d)-rank tensor.
     """
     localH = np.zeros((d, d, d, d))
-    localH[0,0,0,0] = localH[1,1,1,1] = 1./4.
-    localH[0,1,0,1] = localH[1,0,1,0] = -1./4.
-    localH[1,0,0,1] = localH[0,1,1,0] = 1./2.
+    # S = 1 (d = 3)
+    # diagonal elements
+    localH[0,0,0,0] = localH[2,2,2,2] = 1.
+    localH[0,2,0,2] = localH[2,0,2,0] = -1.
+    # nondiagonal ones
+    localH[0,1,1,0] = localH[1,0,0,1] = 1.
+    localH[0,2,1,1] = localH[1,1,0,2] = 1.
+    localH[1,1,2,0] = localH[2,0,1,1] = 1.
+    localH[1,2,2,1] = localH[2,1,1,2] = 1.
+    # S = 1/2 (d = 2)
+    # localH[0,0,0,0] = localH[1,1,1,1] = 1./4.
+    # localH[0,1,0,1] = localH[1,0,1,0] = -1./4.
+    # localH[1,0,0,1] = localH[0,1,1,0] = 1./2.
 
     return localH
 
@@ -303,14 +313,14 @@ def doUpdateForA(MPS, B):
 
 """Main...
 """
-d = 2
-xi = 50
+d = 3
+xi = 128
 expS = 1e-12
-maxIter = 800
+maxIter = 1800
 dTau = 0.1
 
 xir = xic = xi
-theMPS = np.random.rand(xir, xic, d) - .5 + 1j * np.zeros((xir, xic, d))
+theMPS = .5 * (np.random.rand(xir, xic, d) - .5) + 1j * np.zeros((xir, xic, d))
 #theMPS = np.random.rand(xir, xic, d) - .5 + 1j * (np.random.rand(xir, xic, d) - .5)
 #print "theMPS\n", theMPS
 
@@ -341,4 +351,7 @@ while (I != maxIter):
 
     theMPS = doUpdateForA(theMPS, theB)
 
+    eta = np.linalg.norm(theF)
+    print "eta", I, eta
+    if eta < 100 * expS: break
     I += 1
