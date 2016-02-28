@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+import sys
+import math
 import numpy as np
 from scipy.sparse.linalg import ArpackNoConvergence
 from scipy.sparse.linalg import ArpackError
@@ -394,8 +396,8 @@ def writeFiles(K_, R_):
     np.save('R_' + aux, R_)
 
 def readFiles(chi__):
-    K__ = np.random.rand(chi__, chi__) - .5
-    R__ = np.random.rand(chi__, chi__) - .5
+    K__ = .5 * (np.random.rand(chi__, chi__) - .5)
+    R__ = .5 * (np.random.rand(chi__, chi__) - .5)
     rho__ = fixPhase(np.random.rand(chi__, chi__) - .5)
     F__ = np.random.rand(chi__, chi__) - .5
     muL__ = np.random.rand(chi__, chi__) - .5
@@ -410,15 +412,33 @@ def readFiles(chi__):
     except IOError:
         R_ = R__
 
+    Q_ = K_ - .5 * (np.dot(adj(R_), R_))
+    eigv, pho = getLargestW(Q_, R_, 'R', 'SM', None)
+    pho = fixPhase(pho.real)
+    eval__, evec__ = spla.eigh(pho)
+    print "pho\n", pho
+    print "tr(pho)", np.trace(pho), "\neval", eval__
+    K_ = np.dot(adj(evec__), np.dot(K_, evec__))
+    R_ = np.dot(adj(evec__), np.dot(R_, evec__))
+
+    Q_ = K_ - .5 * (np.dot(adj(R_), R_))
+    eigv, pho = getLargestW(Q_, R_, 'R', 'SM', None)
+    pho = fixPhase(pho.real)
+    print "pho\n", pho
+
     chi_, chi_ = K_.shape
     if(K_.shape < K__.shape):
         print "Expanding", chi_, "->", chi__
-        K__[:chi_, :chi_] = K_
-        R__[:chi_, :chi_] = R_
+        K__[chi__-chi_:, chi__-chi_:] = K_
+        R__[chi__-chi_:, chi__-chi_:] = R_
+#        K__[:chi_, :chi_] = K_
+#        R__[:chi_, :chi_] = R_
     elif(K_.shape > K__.shape):
         print "Shrinking", chi_, "->", chi__
-        K__ = K_[:chi__, :chi__]
-        R__ = R_[:chi__, :chi__]
+        K__ = K_[chi_-chi__:, chi_-chi__:]
+        R__ = R_[chi_-chi__:, chi_-chi__:]
+#        K__ = K_[:chi__, :chi__]
+#        R__ = R_[:chi__, :chi__]
     else:
         print "Equating", chi_, "==", chi__
         K__ = K_
@@ -430,6 +450,32 @@ def readFiles(chi__):
 
     return K__, R__, rho__, F__, muL__, muR__
 
+def readParams(file):
+    f = open(file, 'r')
+    chi_, dTau_, w_, mu_ = f.read().split()
+    f.close()
+
+    return int(chi_), float(dTau_), float(w_), float(mu_)
+
+def vonEntropy(rho_):
+    eval_, evec_ = spla.eigh(rho_)
+    eval_ = abs(eval_)
+    print "eval_ = ", eval_
+    print "#tr(rho)", np.sum(w for w in eval_),
+    print "S(rho)", np.sum(-w * math.log(w) for w in eval_),
+    print "S(rho)", np.sum(-w * math.log(w, 2) for w in eval_)
+
+def getLargestVals(Q_, R_, way, myWhich, myGuess):
+    chi, chi = Q_.shape
+
+    linOpWrap = functools.partial(linOpForT, Q_, R_, way)
+    linOpForEigs = spspla.LinearOperator((chi * chi, chi * chi),
+                                         matvec = linOpWrap, dtype = 'float64')
+    omega, X = spspla.eigs(linOpForEigs, k = 6, which = myWhich, tol = expS,
+                           maxiter = maxIter, v0 = myGuess, ncv = 10)
+
+    return omega, X
+
 
 
 """
@@ -437,16 +483,23 @@ Main...
 """
 
 #np.random.seed(2)
+m, v, w, mu = .5, -2., 25., 1.
 maxIter, expS, xi = 90000, 1.e-12, 24
-oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/50, 1.e-3, 0.125
+oldEta, dTau, dTauMin, dTauMax = 1.e9, .125/100, 1.e-3, 0.125
+xi, dTau, w, mu = readParams(sys.argv[1])
 K, R, rho, F, muL, muR = readFiles(xi)
 
-m, v, w, mu = .5, -.5, 1., 4.
+#Q = K - .5 * (np.dot(adj(R), R))
+#tVals, tVecs = getLargestVals(Q, R, 'L', 'SM', None)
+#print >> sys.stderr, "tVals", tVals
+#print >> sys.stderr, "|tVals|", np.abs(tVals)
+
+#exit()
 
 I, flag, measCorr = 0, False, 1.e-1
 while (not flag):#I != maxIter):
     print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
-    if(I % 1000 == 0): print "xi", xi, "v", v, "w", w, "mu", mu
+    if(I % 1000 == 0): print "xi", xi, "v", v, "w", w, "mu", mu, "m", m
 
     Q, rho = leftNormalization(K, R, rho)
     #Q, rho = rightNormalization(K, R, ...)
@@ -466,7 +519,8 @@ while (not flag):#I != maxIter):
     calcQuantities(Q, R, rho, 'L')
 
     if(oldEta < measCorr):
-        onePartCorr(Q, R, rho)
+        vonEntropy(rho)
+	onePartCorr(Q, R, rho)
         rhoRhoCorr(Q, R, rho)
         writeFiles(K, R)
         measCorr /= 10
