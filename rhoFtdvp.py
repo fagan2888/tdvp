@@ -122,27 +122,17 @@ def buildLocalH(Jh, hz):
     Returns a list of local hamiltonians, where each term 
     is a (d, d, d, d)-rank tensor.
     """
-    # bulkLocH = np.zeros((d, d, d, d))
-    # bulkLocH[0,0,0,0] = hz
-    # bulkLocH[1,1,1,1] = -hz
-    # bulkLocH[1,0,0,1] = bulkLocH[0,1,1,0] = 2. * Jh
-    
-    # lBryLocH = np.zeros((d, d, d, d))
-    # lBryLocH[0,0,0,0] = 3. * hz / 2.
-    # lBryLocH[1,1,1,1] = -3. * hz / 2.
-    # lBryLocH[0,1,0,1] = hz / 2.
-    # lBryLocH[1,0,1,0] = -hz / 2.
-    # lBryLocH[1,0,0,1] = lBryLocH[0,1,1,0] = 2. * Jh
+    Sx, Sy = np.array([[0., 1.], [1., 0.]]), np.array([[0., -1.j], [1.j, 0.]])
+    Sz, Id = np.diag([1., -1.]), np.eye(d)
+    bulkLocH = Jh * np.kron(Sx, Sx) + Jh * np.kron(Sy, Sy) \
+               + (hz / 2.) * (np.kron(Sz, Id) + np.kron(Id, Sz))
+    lBryLocH = Jh * np.kron(Sx, Sx) + Jh * np.kron(Sy, Sy) \
+               + hz * np.kron(Sz, Id) + (hz / 2.) * np.kron(Id, Sz)
+    rBryLocH = Jh * np.kron(Sx, Sx) + Jh * np.kron(Sy, Sy) \
+               + (hz / 2.) * np.kron(Sz, Id) + hz * np.kron(Id, Sz)
 
-    # rBryLocH = np.zeros((d, d, d, d))
-    # rBryLocH[0,0,0,0] = 3. * hz / 2.
-    # rBryLocH[1,1,1,1] = -3. * hz / 2.
-    # rBryLocH[0,1,0,1] = -hz / 2.
-    # rBryLocH[1,0,1,0] = hz / 2.
-    # rBryLocH[1,0,0,1] = rBryLocH[0,1,1,0] = 2. * Jh
-
-    h = [bulkLocH for n in range(length-1-2)]
-    h = [lBryLocH] + h + [rBryLocH]
+    h = [bulkLocH.real.reshape(d, d, d, d) for n in range(length-1-2)]
+    h = [lBryLocH.real.reshape(d, d, d, d)] + h + [rBryLocH.real.reshape(d, d, d, d)]
     print "theH", type(h), len(h)
 
     return h
