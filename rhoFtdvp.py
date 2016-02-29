@@ -133,7 +133,9 @@ def buildLocalH(Jh, hz):
 
     h = [bulkLocH.real.reshape(d, d, d, d) for n in range(length-1-2)]
     h = [lBryLocH.real.reshape(d, d, d, d)] + h + [rBryLocH.real.reshape(d, d, d, d)]
-    print "theH", type(h), len(h)
+
+    print "theH", type(h), len(h), "Jex", Jh, "hz", hz
+    for n in range(length-1): print h[n].reshape(d * d, d * d)
 
     return h
 
@@ -144,8 +146,6 @@ def buildHElements(MPS, H):
     Returns a tensor of the form C[a, b, s, t].
     """
     C = []
-    for n in range(length-1):
-        print H[n].reshape(d * d, d * d)
 
     for n in range(length-1):
         AA = np.tensordot(MPS[n], MPS[n+1], axes=([1,0]))
@@ -181,6 +181,7 @@ def calcLs(MPS):
         L.append(tmp.diagonal())
         del LA, A, tmp
 
+    L.append(np.asarray([1.]))
     return L
 
 def calcRs(MPS):
@@ -211,6 +212,7 @@ def calcRs(MPS):
         del AR, A, tmp
 
     R.reverse()
+    R.append(np.asarray([1.]))
     return R
 
 def calcHmeanval(MPS, C):
@@ -398,11 +400,21 @@ def supOp(A, B, way, Op, X):
 
         return OpBdagXA
 
+def meanVals(A, L, R):
+    Sz, mvSz = np.diag([1., -1.]), .0
+    for k in range(length):
+        toR = supOp(A[k], A[k], 'R', Sz, np.diag(R[k+1]))
+        szk = np.trace(np.diag(L[k-1]).dot(toR))
+        mvSz += szk
+        print "Something", k, szk
+        #toL = supOp(A[k], A[k], 'L', Sz, np.diag(L[k-1]))
+        #print "Something", k, np.trace(toL.dot(np.diag(R[k+1])))
+    print "<Sz>", mGh, mvSz
+
 
 
 """Main...
 """
-np.random.seed(9)
 d, xi = 2, 8
 length, Jex, mGh = 6, 1.0, float(sys.argv[1])
 maxIter, epsS, dTau = 10000, 1e-12, 0.051
@@ -415,11 +427,9 @@ theMPS = [np.random.rand(xir[n], xic[n], d)-0.5 for n in range(length)]
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
 theH = buildLocalH(Jex, mGh)
-print "Jex", Jex, "hz", mGh, "theH =\n", theH[1].reshape((d*d, d*d))#"h =", theH
 
 I = 0
-while (I != maxIter):
-
+while I != maxIter:
     leftNormalization(theMPS, xir, xic)
     print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
@@ -431,19 +441,8 @@ while (I != maxIter):
     theL = calcLs(theMPS)
     print "theL =", len(theL)
 
-    theL.append(np.asarray([1.]))
-    theR.append(np.asarray([1.]))
-    Sz, mvSz = np.diag([1., -1.]), .0
-    for k in range(length):
-        toR = supOp(theMPS[k], theMPS[k], 'R', Sz, np.diag(theR[k+1]))
-        szk = np.trace(np.diag(theL[k-1]).dot(toR))
-        mvSz += szk
-        print "Something", k, szk
-        #toL = supOp(theMPS[k], theMPS[k], 'L', Sz, np.diag(theL[k-1]))
-        #print "Something", k, np.trace(toL.dot(np.diag(theR[k+1])))
-    # break
-    print "<Sz>", mGh, mvSz
-    
+    meanVals(theMPS, theL, theR)
+
     theC = buildHElements(theMPS, theH)
     print "theC =", len(theC)
 
