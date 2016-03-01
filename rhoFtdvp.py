@@ -63,7 +63,7 @@ def leftNormalization(MPS, chir, chic):
             del U, S, V, SV, aux, i, j
 
 def rightNormalization(MPS, chir, chic):
-    """Returns a left-normalized MPS.
+    """Returns a right-normalized MPS.
     """
     for n in range(length):
         ip = length-n-1
@@ -266,11 +266,6 @@ def nullSpaceR(MPS):
         R = np.reshape(R, (chir * aux, chic))
         U, S, V = np.linalg.svd(R, full_matrices=True)
 
-        #dimS, = S.shape
-        #extraS = np.zeros((chir * aux) - dimS)
-        #Sp = np.append(S, extraS, 0)
-        #maskp = (Sp < epsS) #try: np.select(...)
-
         mask = np.empty(chir * aux, dtype=bool)
         mask[:] = False; mask[chic:] = True
         VRdag = np.compress(mask, U, axis=1)
@@ -290,6 +285,48 @@ def nullSpaceR(MPS):
         del R, U, S, V, VRdag, Null, Id
 
     return VR
+
+def nullSpaceL(MPS, rho_):
+    """Calculates the auxiliary matrix L and its null space VL.
+
+    The VL matrices are returned as the tensor VL[a, b, s].
+    Given a fixed gauge condition the R gets simplified.
+    Notice that if VL.size = 0 there's no update B[x](n) because
+    VL(n) will be an empty array. However, all the operations
+    associated with VR are still "well-defined".
+    """
+    VL = []
+
+    for n in range(length):
+        Adag = np.transpose(np.conjugate(MPS[n]), (1, 0, 2))
+        if n == 0: rSqrt = np.ones((1,1))
+        else:      rSqrt = np.diag(map(np.sqrt, rho_[n-1]))
+        L = np.tensordot(Adag, rSqrt, axes=([1,0]))
+        chir, aux, chic = L.shape
+
+        L = np.reshape(L, (chir, aux * chic))
+        U, S, V = np.linalg.svd(L, full_matrices=True)
+
+        mask = np.empty(aux * chic, dtype=bool)
+        mask[:] = False; mask[chir:] = True
+        VLdag = np.compress(mask, V, axis=0)
+
+        L = np.conjugate(np.transpose(L))
+        Null = np.tensordot(VLdag, L, axes=([1,0]))
+        Id = np.tensordot(VLdag, VLdag.T, axes=([1,0]))
+
+        tmp = np.conjugate(VLdag.T)
+        lpr, lmz = tmp.shape
+        tmp = np.reshape(tmp, (aux, chic, lmz))
+        tmp = np.transpose(tmp, (2, 0, 1))
+        VL.append(tmp)
+
+        #print "D =", n, L.T.shape, U.shape, Sp.shape, V.shape, VLdag.shape
+        print "mask =", mask, S, "\nV\n", V, "\nVLdag\n", VLdag, \
+            "\nNull\n", Null, "\nV+V\n", Id
+        del L, U, S, V, VLdag, Null, Id
+
+    return VL
 
 def calcFs(MPS, C, L, K, VR):
     """Returns the list of matrices x*(n) = F(n).
@@ -415,6 +452,7 @@ def meanVals(A, L, R):
 
 """Main...
 """
+np.random.seed(10)
 d, xi = 2, 8
 length, Jex, mGh = 6, 1.0, float(sys.argv[1])
 maxIter, epsS, dTau = 10000, 1e-12, 0.051
@@ -451,6 +489,8 @@ while I != maxIter:
 
     theVR = nullSpaceR(theMPS)
     print "theVR =", map(np.shape, theVR)
+    theVL = nullSpaceL(theMPS, theL)
+    print "theVL =", map(np.shape, theVL)
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
     print "theF =", map(np.shape, theF)
