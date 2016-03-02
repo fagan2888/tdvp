@@ -449,8 +449,25 @@ def meanVals(A, L, R):
         #print "Something", k, np.trace(toL.dot(np.diag(R[k+1])))
     print "<Sz>", mGh, mvSz
 
-def calcZ01andZ10(C, L, VL, VR):
-    """Say anything about what this function does.
+def calcYforZZs(C, L, VL, VR):
+    """Calculates the quantity G(n,n+1) defined in J.H. thesis.
+
+    Auxiliary routine used in the dynamic expansion of the
+    variational manifold.
+
+    Y(n,n+1) or G(n,n+1) basically coresponds to the two-site
+    Hamiltonian applied to the MPS as done in TEBD. Notice that
+    there are length-1 of such Y matrices. Its dimensions
+    correspond to (d*D[n-1]-D[n]) x (q*D[n+1]-D[n]).
+
+    When either left or right null spaces, VR and VL respectively,
+    are empty imply that Y will be empty as well. In this case we
+    define Y as an empty array of the proper shape. Alternatively
+    we could also define Y as None.
+
+    Be specially careful in the way such empty/None matrices are
+    treated when calculating the corresponding Z's or B's in order
+    to have properly define matrix operations.
     """
     Y = []
 
@@ -467,8 +484,8 @@ def calcZ01andZ10(C, L, VL, VR):
 
         Y.append(currY)
 
-    Y.append(np.array([], dtype=Y[0].dtype).reshape(0, 0))
     print "theY =", len(Y), map(np.shape, Y)
+    return Y
 
 def getUpdateB01andB10():
     pass
@@ -481,8 +498,8 @@ def doDynamicExpansion():
 """Main...
 """
 np.random.seed(10)
-d, xi = 2, 8
-length, Jex, mGh = 8, 1.0, float(sys.argv[1])
+d, xi = 2, 2
+length, Jex, mGh = 6, 1.0, float(sys.argv[1])
 maxIter, epsS, dTau = 10000, 1e-12, 0.051
 
 xir = [xi * d for n in range(length)]
@@ -520,7 +537,7 @@ while I != maxIter:
     theVL = nullSpaceL(theMPS, theL)
     print "theVL =", map(np.shape, theVL)
 
-    calcZ01andZ10(theC, theL, theVL, theVR)
+    theY = calcYforZZs(theC, theL, theVL, theVR)
     break
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
