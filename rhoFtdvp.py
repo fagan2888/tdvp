@@ -153,6 +153,7 @@ def buildHElements(MPS, H):
         tmp = np.transpose(tmp, (2, 3, 0, 1))
 
         C.append(tmp)
+        print "C.shape", tmp.shape
         del AA, tmp
 
     #print C
@@ -290,18 +291,18 @@ def nullSpaceL(MPS, rho_):
     """Calculates the auxiliary matrix L and its null space VL.
 
     The VL matrices are returned as the tensor VL[a, b, s].
-    Given a fixed gauge condition the R gets simplified.
+    Given a fixed gauge condition the L gets simplified.
     Notice that if VL.size = 0 there's no update B[x](n) because
     VL(n) will be an empty array. However, all the operations
-    associated with VR are still "well-defined".
+    associated with VL are still "well-defined".
     """
     VL = []
 
     for n in range(length):
         Adag = np.transpose(np.conjugate(MPS[n]), (1, 0, 2))
-        if n == 0: rSqrt = np.ones((1,1))
-        else:      rSqrt = np.diag(map(np.sqrt, rho_[n-1]))
-        L = np.tensordot(Adag, rSqrt, axes=([1,0]))
+        if n == 0: Lsqrt = np.ones((1,1))
+        else:      Lsqrt = np.diag(map(np.sqrt, rho_[n-1]))
+        L = np.tensordot(Adag, Lsqrt, axes=([1,0]))
         chir, aux, chic = L.shape
 
         L = np.reshape(L, (chir, aux * chic))
@@ -318,7 +319,7 @@ def nullSpaceL(MPS, rho_):
         tmp = np.conjugate(VLdag.T)
         lpr, lmz = tmp.shape
         tmp = np.reshape(tmp, (aux, chic, lmz))
-        tmp = np.transpose(tmp, (2, 0, 1))
+        tmp = np.transpose(np.transpose(tmp, (2, 1, 0)), (1, 0, 2))
         VL.append(tmp)
 
         #print "D =", n, L.T.shape, U.shape, Sp.shape, V.shape, VLdag.shape
@@ -448,13 +449,40 @@ def meanVals(A, L, R):
         #print "Something", k, np.trace(toL.dot(np.diag(R[k+1])))
     print "<Sz>", mGh, mvSz
 
+def calcZ01andZ10(C, L, VL, VR):
+    """Say anything about what this function does.
+    """
+    Y = []
+
+    for n in range(length-1):
+        if n == 0: Lsqrt = np.ones((1,1))
+        else:      Lsqrt = np.diag(map(np.sqrt, L[n-1]))
+        VLdag = np.transpose(np.conjugate(VL[n]), (1, 0, 2))
+        VRdag = np.transpose(np.conjugate(VR[n+1]), (1, 0, 2))
+        print "For Y", VLdag.shape, Lsqrt.shape, C[n].shape, VRdag.shape
+
+        CVRdag = np.tensordot(C[n], VRdag, axes=([1,3], [0,2]))
+        LsCVRdag = np.tensordot(Lsqrt, CVRdag, axes=([1,0]))
+        currY = np.tensordot(VLdag, LsCVRdag, axes=([1,2], [0,1]))
+
+        Y.append(currY)
+
+    Y.append(np.array([], dtype=Y[0].dtype).reshape(0, 0))
+    print "theY =", len(Y), map(np.shape, Y)
+
+def getUpdateB01andB10():
+    pass
+
+def doDynamicExpansion():
+    pass
+
 
 
 """Main...
 """
 np.random.seed(10)
 d, xi = 2, 8
-length, Jex, mGh = 6, 1.0, float(sys.argv[1])
+length, Jex, mGh = 8, 1.0, float(sys.argv[1])
 maxIter, epsS, dTau = 10000, 1e-12, 0.051
 
 xir = [xi * d for n in range(length)]
@@ -491,6 +519,9 @@ while I != maxIter:
     print "theVR =", map(np.shape, theVR)
     theVL = nullSpaceL(theMPS, theL)
     print "theVL =", map(np.shape, theVL)
+
+    calcZ01andZ10(theC, theL, theVL, theVR)
+    break
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
     print "theF =", map(np.shape, theF)
