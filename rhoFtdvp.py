@@ -487,6 +487,60 @@ def calcYforZZs(C, L, VL, VR):
     print "theY =", len(Y), map(np.shape, Y)
     return Y
 
+def calcZ01andZ10(Y):
+    """Returns the parametrizations Z01[n] and Z10[n].
+
+    Auxiliary routine that calculates the matrices Z01[n] and Z10[n]
+    used in the calculation of the tangent vectors B01[n] and B10[n].
+    These vectors are necessary when expanding the dynamics of the
+    time evolution, a.k.a. expansion of the manifold.
+
+    The dimensions of the matrices are (q*D[n-1]-D[n]) x g[n] for
+    Z01[n] and g[n] x (q*D[n+1]-D[n]) for Z10[n].
+
+    Notice that we haven't defined a tildeD[n] that sets how large
+    the variational manifold can grow locally. Ideally,
+    g[n] = min(tildeD[n]-D[n], gamma[n]),
+    where gamma[n] is the dimension resulting from the Y[n]'s svd.
+
+    !!!! WARNING: !!!! We haven't defined such tildeD[n] rendering
+    the entire evolution "exact", since there's no truncation.
+    IS THIS TRUE?
+
+    The routine doesn't treat the boundaries leave the Z's as None.
+    Similar as in calcYforZZs(...) we treat the Z's with empty null
+    spaces as empty arrays of appropriate dimensions.
+    """
+    Z01, Z10 = [None] * length, [None] * length
+
+    for n in range(length-1):
+        #print "Doing", n
+
+        try:
+            U, S, V = np.linalg.svd(Y[n], full_matrices=False)
+        except np.linalg.LinAlgError as err:
+            if 'empty' in err.message:
+                row, col = Y[n].shape
+                Z01[n] = np.array([], dtype=Y[n].dtype).reshape(row, 0)
+                Z10[n+1] = np.array([], dtype=Y[n].dtype).reshape(0, col)
+                print "Empty", n, Z01[n].shape, n+1, Z10[n+1].shape
+            else:
+                raise
+        else:
+            Ssq = np.diag(np.sqrt(S))
+            Z01[n] = U.dot(Ssq)
+            Z10[n+1] = Ssq.dot(V)
+            print "Fill ", n, U.shape, n+1, V.shape#, Z01[n].shape, Z10[n+1].shape
+
+    # treating boundaries as empty arrays not as None
+    # row, col = Y[-1].shape
+    # Z01[-1] = np.array([]).reshape(row, 0)
+    # row, col = Y[0].shape
+    # Z10[0] = np.array([]).reshape(0, col)
+    print "Z01", map(np.shape, Z01), "\nZ10", map(np.shape, Z10)
+
+    return Z01, Z10
+
 def getUpdateB01andB10():
     pass
 
@@ -538,6 +592,7 @@ while I != maxIter:
     print "theVL =", map(np.shape, theVL)
 
     theY = calcYforZZs(theC, theL, theVL, theVR)
+    theZ01, theZ10 = calcZ01andZ10(theY)
     break
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
