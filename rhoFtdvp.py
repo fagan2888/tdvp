@@ -611,6 +611,32 @@ def doUpdateAndExpandA(B, B01, B10, MPS):
     MPS = newAs
     return newAs
 
+def doDynamicExpansion(MPS, L, C, VR, B):
+    """Auxiliary calling function to perform the dynamic expansion.
+
+    This routine should be used instead of doUpdateForA(...) when
+    trying to perform an update and expansion of the variational
+    manifold defined by the MPS A[n,t] at some given time t.
+
+    The idea is to use this routine and doUpdateForA(...) together
+    with the flags |x*| and dynexp, in the following way:
+
+    if |x*| > eps and dynexp == False:
+        doUpdateForA(...)
+    else if |x*| < eps and dynexp == True:
+        doDynamicExpansion(...)
+    else if |x*| < eps and dynexp == False:
+        doMeasuremnts(...)
+        break  #we're done!
+    """
+    VL = nullSpaceL(MPS, L)
+    print "VL =", map(np.shape, VL)
+
+    Y = calcYforZZs(C, L, VL, VR)
+    Z01, Z10 = calcZ01andZ10(Y)
+    B01, B10 = getB01andB10(Z01, Z10, L, VL, VR)
+    doUpdateAndExpandA(B, B01, B10, MPS)
+
 
 
 """Main...
@@ -652,8 +678,8 @@ while I != maxIter:
 
     theVR = nullSpaceR(theMPS)
     print "theVR =", map(np.shape, theVR)
-    theVL = nullSpaceL(theMPS, theL)
-    print "theVL =", map(np.shape, theVL)
+    # theVL = nullSpaceL(theMPS, theL)
+    # print "theVL =", map(np.shape, theVL)
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
     print "theF =", map(np.shape, theF)
@@ -661,10 +687,11 @@ while I != maxIter:
     theB = getUpdateB(theL, theF, theVR)
     print "theB =", map(np.shape, theB)
 
-    theY = calcYforZZs(theC, theL, theVL, theVR)
-    theZ01, theZ10 = calcZ01andZ10(theY)
-    theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
-    doUpdateAndExpandA(theB, theB01, theB10, theMPS)
+    # theY = calcYforZZs(theC, theL, theVL, theVR)
+    # theZ01, theZ10 = calcZ01andZ10(theY)
+    # theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
+    # doUpdateAndExpandA(theB, theB01, theB10, theMPS)
+    doDynamicExpansion(theMPS, theL, theC, theVR, theB)
     break
 
     doUpdateForA(theMPS, theB)
