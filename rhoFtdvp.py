@@ -592,7 +592,7 @@ def doUpdateAndExpandA(B, B01, B10, MPS):
     print "B01", map(np.shape, B01)
     print "B10", map(np.shape, B10)
 
-    newAs = []
+    newAs, newXir, newXic = [], [None] * length, [None] * length
 
     for n in range(length):
         rB, cB, aB = B[n].shape
@@ -605,11 +605,12 @@ def doUpdateAndExpandA(B, B01, B10, MPS):
         tmp[rB:, :cB10, :] = np.sqrt(dTau) * B10[n]
 
         newAs.append(tmp)
+        newXir[n], newXic[n], aux = tmp.shape
         print "Expanding", n, B[n].shape, B01[n].shape, B10[n].shape, tmp.shape
         print tmp
 
-    MPS = newAs
-    return newAs
+    # MPS = newAs
+    return newAs, newXir, newXic
 
 def doDynamicExpansion(MPS, L, C, VR, B):
     """Auxiliary calling function to perform the dynamic expansion.
@@ -635,7 +636,8 @@ def doDynamicExpansion(MPS, L, C, VR, B):
     Y = calcYforZZs(C, L, VL, VR)
     Z01, Z10 = calcZ01andZ10(Y)
     B01, B10 = getB01andB10(Z01, Z10, L, VL, VR)
-    doUpdateAndExpandA(B, B01, B10, MPS)
+    newA, newXr, newXc = doUpdateAndExpandA(B, B01, B10, MPS)
+    return newA, newXr, newXc
 
 
 
@@ -691,7 +693,7 @@ while I != maxIter:
     # theZ01, theZ10 = calcZ01andZ10(theY)
     # theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
     # doUpdateAndExpandA(theB, theB01, theB10, theMPS)
-    doDynamicExpansion(theMPS, theL, theC, theVR, theB)
+    theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
     break
 
     doUpdateForA(theMPS, theB)
