@@ -344,7 +344,7 @@ def calcFs(MPS, C, L, K, VR):
 
         if(n == 0): Lsqrt = np.ones((1,1))
         else:       Lsqrt = np.diag(map(np.sqrt, L[n-1]))
-        print "Lsqrt =", Lsqrt.shape
+        # print "Lsqrt =", Lsqrt.shape
 
         if(n < length-1):
             A = np.transpose(np.conjugate(MPS[n+1]), (1, 0, 2))
@@ -373,7 +373,7 @@ def calcFs(MPS, C, L, K, VR):
 
         tmp = tmp1 + tmp2 + tmp3
         F.append(tmp)
-        print tmp
+        print "F", n, "\n", tmp
         del tmp1, tmp2, tmp3, tmp
 
     return F
@@ -398,7 +398,8 @@ def getUpdateB(L, x, VR):
             xVR = np.tensordot(x[n], VR[n], axes=([1,0]))
             tmp = np.tensordot(Lsqrti, xVR, axes=([1,0]))
 
-        print n, Lsqrti.shape, x[n].shape, VR[n].shape, tmp.shape
+        print "B", n, Lsqrti.shape, x[n].shape, VR[n].shape, tmp.shape
+        print tmp
         B.append(tmp)
 
     return B
@@ -455,7 +456,7 @@ def calcYforZZs(C, L, VL, VR):
     Auxiliary routine used in the dynamic expansion of the
     variational manifold.
 
-    Y(n,n+1) or G(n,n+1) basically coresponds to the two-site
+    Y(n,n+1) or G(n,n+1) basically corresponds to the two-site
     Hamiltonian applied to the MPS as done in TEBD. Notice that
     there are length-1 of such Y matrices. Its dimensions
     correspond to (d*D[n-1]-D[n]) x (q*D[n+1]-D[n]).
@@ -465,7 +466,7 @@ def calcYforZZs(C, L, VL, VR):
     define Y as an empty array of the proper shape. Alternatively
     we could also define Y as None.
 
-    Be specially careful in the way such empty/None matrices are
+    Be especially careful in the way such empty/None matrices are
     treated when calculating the corresponding Z's or B's in order
     to have properly define matrix operations.
     """
@@ -508,6 +509,7 @@ def calcZ01andZ10(Y):
     IS THIS TRUE?
 
     The routine doesn't treat the boundaries leave the Z's as None.
+    Now it DOES...
     Similar as in calcYforZZs(...) we treat the Z's with empty null
     spaces as empty arrays of appropriate dimensions.
     """
@@ -533,16 +535,53 @@ def calcZ01andZ10(Y):
             print "Fill ", n, U.shape, n+1, V.shape#, Z01[n].shape, Z10[n+1].shape
 
     # treating boundaries as empty arrays not as None
-    # row, col = Y[-1].shape
-    # Z01[-1] = np.array([]).reshape(row, 0)
-    # row, col = Y[0].shape
-    # Z10[0] = np.array([]).reshape(0, col)
+    Z01[-1] = np.array([], dtype=Y[-1].dtype).reshape(0, 0)
+    Z10[0] = np.array([], dtype=Y[0].dtype).reshape(0, 0)
     print "Z01", map(np.shape, Z01), "\nZ10", map(np.shape, Z10)
 
     return Z01, Z10
 
-def getUpdateB01andB10():
-    pass
+def getB01andB10(Z01, Z10, rho, VL, VR):
+    """Returns tangent vectors for expanding the manifold.
+
+    Be careful with the dot product when there is no expansion to
+    be performed. Set those tensors to be empty.
+    """
+    # print "Z01", Z01#map(np.shape, Z01),
+    # print "Z10", Z10#map(np.shape, Z10)
+    B01, B10 = [], []
+
+    for n in range(length):
+        if n == 0: Lsi = np.ones((1,1))
+        else:      Lsi = np.diag(map(np.sqrt, 1./rho[n-1]))
+
+        row, col = Z01[n].shape
+        if row * col == 0:
+            # should be a 3-rank tensor like B01
+            tmp01 = np.array([], dtype=Z01[n].dtype).reshape(0, 0)
+        else:
+            LsiVL = np.tensordot(Lsi, VL[n], axes=([1,0]))
+            tmp01 = np.tensordot(LsiVL, Z01[n], axes=([1,0]))
+            tmp01 = np.transpose(tmp01, (0, 2, 1))
+
+        print "Done01", n, Lsi.shape, VL[n].shape, Z01[n].shape, tmp01.shape
+        B01.append(tmp01)
+
+    for n in range(length):
+        if n == 0: Lsi = np.ones((1,1))
+        else:      Lsi = np.diag(map(np.sqrt, 1./rho[n-1]))
+
+        row, col = Z10[n].shape
+        if row * col == 0:
+            # should be a 3-rank tensor like B10
+            tmp10 = np.array([], dtype=Z10[n].dtype).reshape(0, 0)
+        else:
+            tmp10 = np.tensordot(Z10[n], VR[n], axes=([1,0]))
+
+        print "Done10", n, Lsi.shape, VR[n].shape, Z10[n].shape, tmp10.shape
+        B10.append(tmp10)
+
+    return B01, B10
 
 def doDynamicExpansion():
     pass
@@ -578,13 +617,13 @@ while I != maxIter:
     theL = calcLs(theMPS)
     print "theL =", len(theL)
 
-    meanVals(theMPS, theL, theR)
+    # meanVals(theMPS, theL, theR)
 
     theC = buildHElements(theMPS, theH)
     print "theC =", len(theC)
 
     theK = calcHmeanval(theMPS, theC)
-    print "theK =", theK
+    print "theK =", theK, "\ntheK =", map(np.shape, theK)
 
     theVR = nullSpaceR(theMPS)
     print "theVR =", map(np.shape, theVR)
@@ -593,6 +632,7 @@ while I != maxIter:
 
     theY = calcYforZZs(theC, theL, theVL, theVR)
     theZ01, theZ10 = calcZ01andZ10(theY)
+    theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
     break
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
