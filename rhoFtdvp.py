@@ -405,8 +405,7 @@ def getUpdateB(L, x, VR):
     return B
 
 def doUpdateForA(MPS, B):
-    """
-    It does the actual update to the MPS state for given time step.
+    """It does the actual update to the MPS state for given time step.
 
     The update is done according to the formula:
     A[n, t + dTau] = A[n, t] - dTau * B[x*](n),
@@ -547,8 +546,6 @@ def getB01andB10(Z01, Z10, rho, VL, VR):
     Be careful with the dot product when there is no expansion to
     be performed. Set those tensors to be empty.
     """
-    # print "Z01", Z01#map(np.shape, Z01),
-    # print "Z10", Z10#map(np.shape, Z10)
     B01, B10 = [], []
 
     for n in range(length):
@@ -557,8 +554,9 @@ def getB01andB10(Z01, Z10, rho, VL, VR):
 
         row, col = Z01[n].shape
         if row * col == 0:
-            # should be a 3-rank tensor like B01
-            tmp01 = np.array([], dtype=Z01[n].dtype).reshape(0, 0)
+            row, row = Lsi.shape
+            lpr, lmz, aux = VL[n].shape
+            tmp01 = np.array([], dtype=Z01[n].dtype).reshape(row, col, aux)
         else:
             LsiVL = np.tensordot(Lsi, VL[n], axes=([1,0]))
             tmp01 = np.tensordot(LsiVL, Z01[n], axes=([1,0]))
@@ -573,8 +571,8 @@ def getB01andB10(Z01, Z10, rho, VL, VR):
 
         row, col = Z10[n].shape
         if row * col == 0:
-            # should be a 3-rank tensor like B10
-            tmp10 = np.array([], dtype=Z10[n].dtype).reshape(0, 0)
+            lpr, col, aux = VR[n].shape
+            tmp10 = np.array([], dtype=Z10[n].dtype).reshape(row, col, aux)
         else:
             tmp10 = np.tensordot(Z10[n], VR[n], axes=([1,0]))
 
@@ -583,8 +581,35 @@ def getB01andB10(Z01, Z10, rho, VL, VR):
 
     return B01, B10
 
-def doDynamicExpansion():
-    pass
+def doUpdateAndExpandA(B, B01, B10, MPS):
+    """Does last update for A[n] and expansion of manifold.
+
+    Does the usual update: A[n, t + dTau] = A[n, t] - dTau * B[x*](n),
+    and in addition also expands A[n, t + dTau] with the corresponding
+    updates proportional to sqrt(dTau) * [B01[n] or B10[n]].
+    """
+    print "B  ", map(np.shape, B)
+    print "B01", map(np.shape, B01)
+    print "B10", map(np.shape, B10)
+
+    newAs = []
+
+    for n in range(length):
+        rB, cB, aB = B[n].shape
+        rB01, cB01, aB01 = B01[n].shape
+        rB10, cB10, aB10 = B10[n].shape
+
+        tmp = np.empty((rB + rB10, cB + cB01, aB), dtype=B[n].dtype)
+        tmp[:rB, :cB, :] = MPS[n] - dTau * B[n]
+        tmp[:rB01, cB:, :] = np.sqrt(dTau) * B01[n]
+        tmp[rB:, :cB10, :] = np.sqrt(dTau) * B10[n]
+
+        newAs.append(tmp)
+        print "Expanding", n, B[n].shape, B01[n].shape, B10[n].shape, tmp.shape
+        print tmp
+
+    MPS = newAs
+    return newAs
 
 
 
@@ -630,16 +655,17 @@ while I != maxIter:
     theVL = nullSpaceL(theMPS, theL)
     print "theVL =", map(np.shape, theVL)
 
-    theY = calcYforZZs(theC, theL, theVL, theVR)
-    theZ01, theZ10 = calcZ01andZ10(theY)
-    theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
-    break
-
     theF = calcFs(theMPS, theC, theL, theK, theVR)
     print "theF =", map(np.shape, theF)
 
     theB = getUpdateB(theL, theF, theVR)
     print "theB =", map(np.shape, theB)
+
+    theY = calcYforZZs(theC, theL, theVL, theVR)
+    theZ01, theZ10 = calcZ01andZ10(theY)
+    theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
+    doUpdateAndExpandA(theB, theB01, theB10, theMPS)
+    break
 
     doUpdateForA(theMPS, theB)
 
