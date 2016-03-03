@@ -487,7 +487,7 @@ def calcYforZZs(C, L, VL, VR):
     print "theY =", len(Y), map(np.shape, Y)
     return Y
 
-def calcZ01andZ10(Y):
+def calcZ01andZ10(Y, MPS):
     """Returns the parametrizations Z01[n] and Z10[n].
 
     Auxiliary routine that calculates the matrices Z01[n] and Z10[n]
@@ -528,10 +528,18 @@ def calcZ01andZ10(Y):
             else:
                 raise
         else:
+            print "S", S
+            __, chic, __ = MPS[n].shape
+            mask = (S > epsS)
+            mask[xiTilde-chic:] = False
+            U = np.compress(mask, U, 1)
+            S = np.compress(mask, S, 0)
+            V = np.compress(mask, V, 0)
+
             Ssq = np.diag(np.sqrt(S))
             Z01[n] = U.dot(Ssq)
             Z10[n+1] = Ssq.dot(V)
-            print "Fill ", n, U.shape, n+1, V.shape#, Z01[n].shape, Z10[n+1].shape
+            print "Fill ", n, U.shape, n+1, V.shape, "mask", mask
 
     # treating boundaries as empty arrays not as None
     Z01[-1] = np.array([], dtype=Y[-1].dtype).reshape(0, 0)
@@ -634,9 +642,11 @@ def doDynamicExpansion(MPS, L, C, VR, B):
     print "VL =", map(np.shape, VL)
 
     Y = calcYforZZs(C, L, VL, VR)
-    Z01, Z10 = calcZ01andZ10(Y)
+    Z01, Z10 = calcZ01andZ10(Y, MPS)
     B01, B10 = getB01andB10(Z01, Z10, L, VL, VR)
     newA, newXr, newXc = doUpdateAndExpandA(B, B01, B10, MPS)
+    print "hex(MPS)", hex(id(MPS)), "hex(newA)", hex(id(newA))
+    print "Before", map(np.shape, MPS), "\nAfter ", map(np.shape, newA)
     return newA, newXr, newXc
 
 
@@ -644,7 +654,7 @@ def doDynamicExpansion(MPS, L, C, VR, B):
 """Main...
 """
 np.random.seed(10)
-d, xi = 2, 2
+d, xi, xiTilde = 2, 1, 2
 length, Jex, mGh = 6, 1.0, float(sys.argv[1])
 maxIter, epsS, dTau = 10000, 1e-12, 0.051
 
@@ -694,9 +704,12 @@ while I != maxIter:
     # theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
     # doUpdateAndExpandA(theB, theB01, theB10, theMPS)
     theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
-    break
+    xi = xiTilde
+    xiTilde *= d
+    print "InMain", map(np.shape, theMPS)
+    if I == 1: break
 
-    doUpdateForA(theMPS, theB)
+    #doUpdateForA(theMPS, theB)
 
     eta = np.linalg.norm(map(np.linalg.norm, theF))
     print "eta", I, eta
