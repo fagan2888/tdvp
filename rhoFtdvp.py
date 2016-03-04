@@ -62,6 +62,8 @@ def leftNormalization(MPS, chir, chic):
             print "shape =", MPS[n+1].shape
             del U, S, V, SV, aux, i, j
 
+    return max(chir)
+
 def rightNormalization(MPS, chir, chic):
     """Returns a right-normalized MPS.
     """
@@ -113,6 +115,8 @@ def rightNormalization(MPS, chir, chic):
             aux, chic[ip-1], aux = MPS[ip-1].shape
             print "shape =", MPS[ip-1].shape
             del U, S, V, US, aux, i, j
+
+    return max(chic)
 
 def buildLocalH(Jh, hz):
     """Builds local hamiltonian (dxd matrix).
@@ -245,6 +249,7 @@ def calcHmeanval(MPS, C):
         del AA, tmp, A
 
     K.reverse()
+    print "Energy", I, K[0][0,0]
     return K
 
 def nullSpaceR(MPS):
@@ -528,9 +533,9 @@ def calcZ01andZ10(Y, MPS):
             else:
                 raise
         else:
-            print "S", S
+            print "S", S, "\nU", V, "\nU", V
             __, chic, __ = MPS[n].shape
-            mask = (S > epsS)
+            mask = (S > epsS) #np.array([True] * S.shape[0])
             mask[xiTilde-chic:] = False
             U = np.compress(mask, U, 1)
             S = np.compress(mask, S, 0)
@@ -551,8 +556,10 @@ def calcZ01andZ10(Y, MPS):
 def getB01andB10(Z01, Z10, rho, VL, VR):
     """Returns tangent vectors for expanding the manifold.
 
-    Be careful with the dot product when there is no expansion to
-    be performed. Set those tensors to be empty.
+    Be careful with the tensor product when there is no expansion
+    to be performed. Set those tensors to be empty. It's perfectly
+    OK to do so, since patching an empty array with some zero
+    dimensions and one with finite dimensions is well defined.
     """
     B01, B10 = [], []
 
@@ -574,9 +581,6 @@ def getB01andB10(Z01, Z10, rho, VL, VR):
         B01.append(tmp01)
 
     for n in range(length):
-        if n == 0: Lsi = np.ones((1,1))
-        else:      Lsi = np.diag(map(np.sqrt, 1./rho[n-1]))
-
         row, col = Z10[n].shape
         if row * col == 0:
             lpr, col, aux = VR[n].shape
@@ -592,7 +596,7 @@ def getB01andB10(Z01, Z10, rho, VL, VR):
 def doUpdateAndExpandA(B, B01, B10, MPS):
     """Does last update for A[n] and expansion of manifold.
 
-    Does the usual update: A[n, t + dTau] = A[n, t] - dTau * B[x*](n),
+    Does the update: A[n, t + dTau] = A[n, t] - dTau * B[x* = F](n),
     and in addition also expands A[n, t + dTau] with the corresponding
     updates proportional to sqrt(dTau) * [B01[n] or B10[n]].
     """
@@ -607,7 +611,7 @@ def doUpdateAndExpandA(B, B01, B10, MPS):
         rB01, cB01, aB01 = B01[n].shape
         rB10, cB10, aB10 = B10[n].shape
 
-        tmp = np.empty((rB + rB10, cB + cB01, aB), dtype=B[n].dtype)
+        tmp = np.zeros((rB + rB10, cB + cB01, aB), dtype=B[n].dtype)
         tmp[:rB, :cB, :] = MPS[n] - dTau * B[n]
         tmp[:rB01, cB:, :] = np.sqrt(dTau) * B01[n]
         tmp[rB:, :cB10, :] = np.sqrt(dTau) * B10[n]
@@ -669,10 +673,10 @@ theH = buildLocalH(Jex, mGh)
 
 I = 0
 while I != maxIter:
-    leftNormalization(theMPS, xir, xic)
+    xi = leftNormalization(theMPS, xir, xic)
     print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
-    rightNormalization(theMPS, xir, xic)
+    xi = rightNormalization(theMPS, xir, xic)
     print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
     theR = calcRs(theMPS)
@@ -703,15 +707,26 @@ while I != maxIter:
     # theZ01, theZ10 = calcZ01andZ10(theY)
     # theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
     # doUpdateAndExpandA(theB, theB01, theB10, theMPS)
-    theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
-    xi = xiTilde
-    xiTilde *= d
-    print "InMain", map(np.shape, theMPS)
-    if I == 1: break
+    # theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
+    # xi = xiTilde
+    # xiTilde *= d
+    # print "InMain", map(np.shape, theMPS)
+    # if I == 1: break
 
     #doUpdateForA(theMPS, theB)
 
     eta = np.linalg.norm(map(np.linalg.norm, theF))
-    print "eta", I, eta
-    if eta < 100 * epsS: break
+    print "eta", I, eta, xi, xiTilde
+    if eta < 100 * epsS:
+        if xiTilde < 11:
+            theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
+            xi = xiTilde
+            xiTilde += d
+            print "InMain", map(np.shape, theMPS)
+            # break
+        else:
+            break
+    else: #if eta > 100 * epsS:
+        doUpdateForA(theMPS, theB)
+
     I += 1
