@@ -1,5 +1,6 @@
 #/usr/bin/python
 
+import copy as cp
 import numpy as np
 #from scipy import linalg
 import cmath
@@ -416,11 +417,25 @@ def doUpdateForA(MPS, B):
     A[n, t + dTau] = A[n, t] - dTau * B[x*](n),
     where dTau is the corresponding time step.
     """
-    for n in range(length):
-        MPS[n] -= dTau * B[n]
-        print "cmp shapes =", n, MPS[n].shape, B[n].shape
+    A = [None] * length
 
-    return MPS
+    for n in range(length):
+        A[n] = MPS[n] - dTau * B[n]
+        print "cmp shapes =", n, A[n].shape, B[n].shape
+
+    nA = cp.deepcopy(A)
+    nXir = cp.deepcopy(xir)
+    nXic = cp.deepcopy(xic)
+    xiLoc = leftNormalization(nA, nXir, nXic)
+    xiLoc = rightNormalization(nA, nXir, nXic)
+    faith = np.eye(1)
+
+    for n in range(length):
+        faith = supOp(nA[n], MPS[n], 'L', np.eye(d), faith)
+        # print "Fee", faith.shape
+    print "Fee", I, np.abs(np.trace(faith))
+
+    return A
 
 def supOp(A, B, way, Op, X):
     Bdag = np.transpose(np.conjugate(B), (1, 0, 2))
@@ -517,7 +532,7 @@ def calcZ01andZ10(Y, MPS):
     Similar as in calcYforZZs(...) we treat the Z's with empty null
     spaces as empty arrays of appropriate dimensions.
     """
-    Z01, Z10 = [None] * length, [None] * length
+    Z01, Z10, EPS = [None] * length, [None] * length, []
 
     for n in range(length-1):
         #print "Doing", n
@@ -545,11 +560,15 @@ def calcZ01andZ10(Y, MPS):
             Z01[n] = U.dot(Ssq)
             Z10[n+1] = Ssq.dot(V)
             print "Fill ", n, U.shape, n+1, V.shape, "mask", mask
+        EPS.append(np.dot(Z01[n], Z10[n+1]))
 
     # treating boundaries as empty arrays not as None
     Z01[-1] = np.array([], dtype=Y[-1].dtype).reshape(0, 0)
     Z10[0] = np.array([], dtype=Y[0].dtype).reshape(0, 0)
     print "Z01", map(np.shape, Z01), "\nZ10", map(np.shape, Z10)
+
+    eps = np.linalg.norm(map(np.linalg.norm, EPS))
+    print "eps", I, eps
 
     return Z01, Z10
 
@@ -614,12 +633,24 @@ def doUpdateAndExpandA(B, B01, B10, MPS):
         tmp = np.zeros((rB + rB10, cB + cB01, aB), dtype=B[n].dtype)
         tmp[:rB, :cB, :] = MPS[n] - dTau * B[n]
         tmp[:rB01, cB:, :] = np.sqrt(dTau) * B01[n]
-        tmp[rB:, :cB10, :] = np.sqrt(dTau) * B10[n]
+        tmp[rB:, :cB10, :] = -np.sqrt(dTau) * B10[n]
 
         newAs.append(tmp)
         newXir[n], newXic[n], aux = tmp.shape
         print "Expanding", n, B[n].shape, B01[n].shape, B10[n].shape, tmp.shape
         print tmp
+
+    nA = cp.deepcopy(newAs)
+    nXir = cp.deepcopy(newXir)
+    nXic = cp.deepcopy(newXic)
+    xiLoc = leftNormalization(nA, nXir, nXic)
+    xiLoc = rightNormalization(nA, nXir, nXic)
+    faith = np.eye(1)
+
+    for n in range(length):
+        faith = supOp(nA[n], MPS[n], 'L', np.eye(d), faith)
+        # print "Fee", faith.shape
+    print "Fee", I, np.abs(np.trace(faith)), xiTilde
 
     # MPS = newAs
     return newAs, newXir, newXic
@@ -727,6 +758,6 @@ while I != maxIter:
         else:
             break
     else: #if eta > 100 * epsS:
-        doUpdateForA(theMPS, theB)
+        theMPS = doUpdateForA(theMPS, theB)
 
     I += 1
