@@ -127,8 +127,9 @@ def buildLocalH(Jh, hz):
     Returns a list of local hamiltonians, where each term 
     is a (d, d, d, d)-rank tensor.
     """
+    dLoc = int(np.sqrt(d))
     Sx, Sy = np.array([[0., 1.], [1., 0.]]), np.array([[0., -1.j], [1.j, 0.]])
-    Sz, Id = np.diag([1., -1.]), np.eye(d)
+    Sz, Id = np.diag([1., -1.]), np.eye(dLoc)
     bulkLocH = Jh * np.kron(Sx, Sx) + Jh * np.kron(Sy, Sy) \
                + (hz / 2.) * (np.kron(Sz, Id) + np.kron(Id, Sz))
     lBryLocH = Jh * np.kron(Sx, Sx) + Jh * np.kron(Sy, Sy) \
@@ -136,13 +137,42 @@ def buildLocalH(Jh, hz):
     rBryLocH = Jh * np.kron(Sx, Sx) + Jh * np.kron(Sy, Sy) \
                + (hz / 2.) * np.kron(Sz, Id) + hz * np.kron(Id, Sz)
 
-    h = [bulkLocH.real.reshape(d, d, d, d) for n in range(length-1-2)]
-    h = [lBryLocH.real.reshape(d, d, d, d)] + h + [rBryLocH.real.reshape(d, d, d, d)]
+    h = [bulkLocH.real.reshape(dLoc, dLoc, dLoc, dLoc) for n in range(length-1-2)]
+    h = [lBryLocH.real.reshape(dLoc, dLoc, dLoc, dLoc)] + h \
+        + [rBryLocH.real.reshape(dLoc, dLoc, dLoc, dLoc)]
 
-    print "theH", type(h), len(h), "Jex", Jh, "hz", hz
-    for n in range(length-1): print h[n].reshape(d * d, d * d)
+    print "theH", type(h), len(h), "dLoc", dLoc, "Jex", Jh, "hz", hz
+    for n in range(length-1): print h[n].reshape(dLoc * dLoc, dLoc * dLoc)
 
-    return h
+    #return h
+
+    SxId, IdSx = np.kron(Sx, Id), np.kron(Id, Sx)
+    SyId, IdSy = np.kron(Sy, Id), np.kron(Id, Sy)
+    SzId, IdSz = np.kron(Sz, Id), np.kron(Id, Sz)
+    IdId = np.kron(Id, Id)
+
+    bulkHl = Jh * np.kron(SxId, SxId) + Jh * np.kron(SyId, SyId) \
+             + (hz / 2.) * (np.kron(SzId, IdId) + np.kron(IdId, SzId))
+    lBryHl = Jh * np.kron(SxId, SxId) + Jh * np.kron(SyId, SyId) \
+             + hz * np.kron(SzId, IdId) + (hz / 2.) * np.kron(IdId, SzId)
+    rBryHl = Jh * np.kron(SxId, SxId) + Jh * np.kron(SyId, SyId) \
+             + (hz / 2.) * np.kron(SzId, IdId) + hz * np.kron(IdId, SzId)
+
+    bulkHr = Jh * np.kron(IdSx, IdSx) + Jh * np.kron(IdSy, IdSy) \
+             + (hz / 2.) * (np.kron(IdSz, IdId) + np.kron(IdId, IdSz))
+    lBryHr = Jh * np.kron(IdSx, IdSx) + Jh * np.kron(IdSy, IdSy) \
+             + hz * np.kron(IdSz, IdId) + (hz / 2.) * np.kron(IdId, IdSz)
+    rBryHr = Jh * np.kron(IdSx, IdSx) + Jh * np.kron(IdSy, IdSy) \
+             + (hz / 2.) * np.kron(IdSz, IdId) + hz * np.kron(IdId, IdSz)
+
+    hMpo = [(bulkHl + bulkHr).real.reshape(d, d, d, d) for n in range(length-1-2)]
+    hMpo = [(lBryHl + lBryHr).real.reshape(d, d, d, d)] + hMpo \
+           + [(rBryHl + rBryHr).real.reshape(d, d, d, d)]
+
+    print "Hmpo", type(hMpo), len(hMpo), "d", d, "Jex", Jh, "hz", hz
+    for n in range(length-1): print hMpo[n].reshape(d * d, d * d)
+
+    return hMpo
 
 def buildHElements(MPS, H):
     """Builds the matrix elements of the hamiltonian.
@@ -459,14 +489,14 @@ def supOp(A, B, way, Op, X):
         return OpBdagXA
 
 def meanVals(A, L, R):
-    Sz, mvSz = np.diag([1., -1.]), .0
+    Sz, mvSz = np.kron(np.diag([1., -1.]), np.eye(2)), .0
     for k in range(length):
         toR = supOp(A[k], A[k], 'R', Sz, np.diag(R[k+1]))
-        szk = np.trace(np.diag(L[k-1]).dot(toR))
+        szk = np.trace(np.dot(np.diag(L[k-1]), toR))
         mvSz += szk
         print "Something", k, szk
         #toL = supOp(A[k], A[k], 'L', Sz, np.diag(L[k-1]))
-        #print "Something", k, np.trace(toL.dot(np.diag(R[k+1])))
+        #print "Something", k, np.trace(np.dot(toL, np.diag(R[k+1])))
     print "<Sz>", mGh, mvSz
 
 def calcYforZZs(C, L, VL, VR):
@@ -557,8 +587,8 @@ def calcZ01andZ10(Y, MPS):
             V = np.compress(mask, V, 0)
 
             Ssq = np.diag(np.sqrt(S))
-            Z01[n] = U.dot(Ssq)
-            Z10[n+1] = Ssq.dot(V)
+            Z01[n] = np.dot(U, Ssq)
+            Z10[n+1] = np.dot(Ssq, V)
             print "Fill ", n, U.shape, n+1, V.shape, "mask", mask
         EPS.append(np.dot(Z01[n], Z10[n+1]))
 
@@ -689,9 +719,9 @@ def doDynamicExpansion(MPS, L, C, VR, B):
 """Main...
 """
 np.random.seed(10)
-d, xi, xiTilde = 2, 1, 2
-length, Jex, mGh = 6, 1.0, float(sys.argv[1])
-maxIter, epsS, dTau = 10000, 1e-12, 0.051
+d, xi, xiTilde = 4, 1, 4
+length, Jex, mGh = 8, 1.0, float(sys.argv[1])
+maxIter, epsS, dTau = 10000, 1e-12, 0.01
 
 xir = [xi * d for n in range(length)]
 xir[0] = 1
@@ -702,7 +732,7 @@ print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 theH = buildLocalH(Jex, mGh)
 
 I = 0
-while I != maxIter:
+while True:#I != maxIter:
     xi = leftNormalization(theMPS, xir, xic)
     print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
@@ -714,7 +744,7 @@ while I != maxIter:
     theL = calcLs(theMPS)
     print "theL =", len(theL)
 
-    # meanVals(theMPS, theL, theR)
+    meanVals(theMPS, theL, theR)
 
     theC = buildHElements(theMPS, theH)
     print "theC =", len(theC)
@@ -734,9 +764,9 @@ while I != maxIter:
     eta = np.linalg.norm(map(np.linalg.norm, theF))
     print "eta", I, eta, xi, xiTilde
     if eta < 100 * epsS:
-        if xiTilde < 11:
+        if xiTilde < 3170:
             theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
-            xi, xiTilde = xiTilde, xiTilde + d
+            xi, xiTilde = xiTilde, xiTilde * d
             print "InMain", map(np.shape, theMPS)
         else:
             break
