@@ -697,7 +697,6 @@ xir = [xi * d for n in range(length)]
 xir[0] = 1
 xic = np.roll(xir, -1).tolist()
 theMPS = [np.random.rand(xir[n], xic[n], d)-0.5 for n in range(length)]
-#[np.random.randint(1, 1e9, (xir[n], xic[n], d)) for n in range(length)]
 print "xir =", xir, "\nxic =", xic, "\ntheMPS =", theMPS
 
 theH = buildLocalH(Jex, mGh)
@@ -725,8 +724,6 @@ while I != maxIter:
 
     theVR = nullSpaceR(theMPS)
     print "theVR =", map(np.shape, theVR)
-    # theVL = nullSpaceL(theMPS, theL)
-    # print "theVL =", map(np.shape, theVL)
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
     print "theF =", map(np.shape, theF)
@@ -734,27 +731,13 @@ while I != maxIter:
     theB = getUpdateB(theL, theF, theVR)
     print "theB =", map(np.shape, theB)
 
-    # theY = calcYforZZs(theC, theL, theVL, theVR)
-    # theZ01, theZ10 = calcZ01andZ10(theY)
-    # theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
-    # doUpdateAndExpandA(theB, theB01, theB10, theMPS)
-    # theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
-    # xi = xiTilde
-    # xiTilde *= d
-    # print "InMain", map(np.shape, theMPS)
-    # if I == 1: break
-
-    #doUpdateForA(theMPS, theB)
-
     eta = np.linalg.norm(map(np.linalg.norm, theF))
     print "eta", I, eta, xi, xiTilde
     if eta < 100 * epsS:
         if xiTilde < 11:
             theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
-            xi = xiTilde
-            xiTilde += d
+            xi, xiTilde = xiTilde, xiTilde + d
             print "InMain", map(np.shape, theMPS)
-            # break
         else:
             break
     else: #if eta > 100 * epsS:
