@@ -17,17 +17,14 @@ def powerMethod(MPS, way):
         if way == 'R': Y = linearOpForR(MPS, X)
         else:          Y = linearOpForL(MPS, X)
 
-        Y = np.reshape(Y, (chir, chic))
-        YH = np.transpose(np.conjugate(Y), (1, 0))
-        YHY = np.tensordot(YH, Y, axes=([1, 0]))
-        norm = np.sqrt(np.trace(YHY))
+        norm = np.linalg.norm(Y)
         X = Y / norm
 
-        if np.abs(eVal - norm) < expS: return norm, X
+        if np.abs(eVal - norm) < expS: return [norm], X.reshape(chir, chic)
         else: eVal = norm
 
     print "\nWARNING: powerMethod did not converge\n"
-    return -1, np.zeros(chir, chic)
+    return 1234.5678, np.zeros(chir, chic)
 
 def linearOpForR(MPS, R):
     chir, chic, aux = MPS.shape
@@ -66,18 +63,21 @@ def getLargestW(MPS, way):
         linOpWrapped = functools.partial(linearOpForL, MPS)
 
     linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
-                                         matvec = linOpWrapped)
-                                         #dtype = 'complex128')
-    omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = expS, 
-                           maxiter = maxIter, ncv = 12)
-    X = X.reshape(chir, chic)
+                                         matvec = linOpWrapped, 
+                                         dtype = MPS.dtype)
+    try:
+        omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = expS, 
+                               maxiter = maxIter, ncv = 12)
+    except:
+        omega, X = powerMethod(MPS, way)
+    else:
+        X = X.reshape(chir, chic)
 
     return omega, X
 
 def fixPhase(X):
     Y = X / np.trace(X)
-    norm = np.tensordot(np.transpose(np.conjugate(Y)), Y, axes=([1,0]))
-    norm = np.sqrt(np.trace(norm))
+    norm = np.linalg.norm(Y)
     Y = Y / norm
 
     return Y
@@ -312,14 +312,15 @@ def doUpdateForA(MPS, B):
 
 """Main...
 """
-d, xi = 3, 128
+np.random.seed(9)
+d, xi = 3, 1
 maxIter, expS = 1800, 1.e-12
 dTau = 0.1
 
 xir = xic = xi
-theMPS = .5 * (np.random.rand(xir, xic, d) - .5) + 1j * np.zeros((xir, xic, d))
+theMPS = np.random.rand(xir, xic, d) - .5# + 1j * np.zeros((xir, xic, d))
 #theMPS = np.random.rand(xir, xic, d) - .5 + 1j * (np.random.rand(xir, xic, d) - .5)
-#print "theMPS\n", theMPS
+print "theMPS", type(theMPS), theMPS.dtype, "\n", theMPS
 
 theH = buildLocalH()
 print "theH\n", theH.reshape(d*d, d*d)
