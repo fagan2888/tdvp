@@ -218,14 +218,13 @@ def calcHmeanval(MPS, R, C):
 
     K = np.reshape(K, (chir, chic))
     print "QHAAAAR", QHAAAAR.shape, "K\n", K
-    exit()
 
     return K
 
 def nullSpaceR(MPS, Lambda):
-    R = np.diag(Lambda)
+    # R = np.diag(Lambda)
     AH = np.transpose(np.conjugate(MPS), (1, 0, 2))
-    RR = np.tensordot(np.diag(map(np.sqrt, R)), AH, axes=([1,0]))
+    RR = np.tensordot(np.sqrt(Lambda), AH, axes=([1,0]))
     chir, chic, aux = RR.shape
 
     RR = np.transpose(RR, (0, 2, 1))
@@ -250,16 +249,16 @@ def nullSpaceR(MPS, Lambda):
     tmp = np.reshape(tmp, (lpr, chir, aux))
 
     print "mask =", mask, "\n", S, "\nU\n", U, "\nVRdag\n", VRdag, \
-        "\nNull\n", Null, "\nVV+\n", Id, "\nVR =", tmp.shape
-    del R, U, S, V, VRdag, Null, Id
+        "\nNull\n", Null, "\nVV+\n", Id#, "\nVR =", tmp.shape
+    del U, S, V, VRdag, Null, Id
 
     return tmp
 
 def calcFs(MPS, C, Lambda, K, VR):
     VRdag = np.transpose(np.conjugate(VR), (1, 0, 2))
     Ld = np.diag(Lambda)
-    Lsqrt = Rsqrt = np.diag(map(np.sqrt, Ld))
-    Lsqrti = Rsqrti = np.diag(map(np.sqrt, 1./Ld))
+    Lsqrt = Rsqrt = np.diag(np.sqrt(Ld))
+    Lsqrti = Rsqrti = np.diag(np.sqrt(1. / Ld))
     A = np.transpose(np.conjugate(MPS), (1, 0, 2))
 
     RsiVRdag = np.tensordot(Rsqrti, VRdag, axes=([1,0]))
@@ -288,7 +287,7 @@ def calcFs(MPS, C, Lambda, K, VR):
     return tmp
 
 def getUpdateB(Lambda, x, VR):
-    Rsqrti = Lsqrti = np.diag(map(np.sqrt, 1./np.diag(Lambda)))
+    Rsqrti = Lsqrti = np.diag(np.sqrt(1. / np.diag(Lambda)))
     row, col, aux = VR.shape
 
     if row * col == 0:
