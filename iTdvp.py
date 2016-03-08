@@ -8,14 +8,14 @@ import cmath
 
 np.set_printoptions(suppress=True)#, precision=3)
 
-def powerMethod(MPS, dir):
-    eval = 1234.5678
+def powerMethod(MPS, way):
+    eVal = 1234.5678
     chir, chic, aux = MPS.shape
     X = np.random.rand(chir * chic) - .5
 
     for q in range(maxIter):
-        if(dir == 'R'): Y = linearOpForR(MPS, X)
-        else: Y = linearOpForL(MPS, X)
+        if way == 'R': Y = linearOpForR(MPS, X)
+        else:          Y = linearOpForL(MPS, X)
 
         Y = np.reshape(Y, (chir, chic))
         YH = np.transpose(np.conjugate(Y), (1, 0))
@@ -23,8 +23,8 @@ def powerMethod(MPS, dir):
         norm = np.sqrt(np.trace(YHY))
         X = Y / norm
 
-        if(np.abs(eval - norm) < expS): return norm, X
-        else: eval = norm
+        if np.abs(eVal - norm) < expS: return norm, X
+        else: eVal = norm
 
     print "\nWARNING: powerMethod did not converge\n"
     return -1, np.zeros(chir, chic)
@@ -57,10 +57,10 @@ def buildLargeE(MPS):
 
     return AA
 
-def getLargestW(MPS, dir):
+def getLargestW(MPS, way):
     chir, chic, aux = MPS.shape
 
-    if(dir == 'R'):
+    if way == 'R':
         linOpWrapped = functools.partial(linearOpForR, MPS)
     else:
         linOpWrapped = functools.partial(linearOpForL, MPS)
@@ -206,7 +206,7 @@ def calcHmeanval(MPS, R, C):
                                          dtype = 'complex128')
     K, info = spspla.bicgstab(linOpForBicg, QHAAAAR, tol = expS, 
                               maxiter = maxIter)
-    if(info != 0): print "\nWARNING: bicgstab failed!\n"; exit()
+    if info != 0: print "\nWARNING: bicgstab failed!\n"; exit()
 
     K = np.reshape(K, (chir, chic))
     print "QHAAAAR", QHAAAAR.shape, "K\n", K
@@ -282,7 +282,7 @@ def getUpdateB(Lambda, x, VR):
     Rsqrti = Lsqrti = np.diag(map(np.sqrt, 1./np.diag(Lambda)))
     row, col, aux = VR.shape
 
-    if(row*col == 0):
+    if row * col == 0:
         row, row = Lsqrti.shape
         tmp = np.zeros((row, col, aux))
     else:
@@ -297,8 +297,7 @@ def getUpdateB(Lambda, x, VR):
     return tmp
 
 def doUpdateForA(MPS, B):
-    """
-    It does the actual update to the MPS state for given time step.
+    """It does the actual update to the MPS state for given time step.
 
     The update is done according to the formula:
     A(t + dTau) = A(t) - dTau * B(x*),
@@ -313,10 +312,8 @@ def doUpdateForA(MPS, B):
 
 """Main...
 """
-d = 3
-xi = 128
-expS = 1e-12
-maxIter = 1800
+d, xi = 3, 128
+maxIter, expS = 1800, 1.e-12
 dTau = 0.1
 
 xir = xic = xi
@@ -328,8 +325,8 @@ theH = buildLocalH()
 print "theH\n", theH.reshape(d*d, d*d)
 
 I = 0
-while (I != maxIter):
-    print "\t\t\t\t\t\t\t############# ITERATION", I, "#############"
+while I != maxIter:
+    print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
 
     theL, theMPS = symmNormalization(theMPS, xir, xic)
     print "theMPS\n", theMPS, "\ntheL\n", theL
