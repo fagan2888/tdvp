@@ -133,7 +133,6 @@ def symmNormalization(MPS, chir, chic):
     ELambda = linearOpForR(nMPS, RealLambda).reshape(chir, chic)
     LambdaE = linearOpForL(nMPS, RealLambda).reshape(chir, chic)
     print "Trace(RealLambda)", Trace, "\nE|r)\n", ELambda, "\n(l|E\n", LambdaE
-    exit()
 
     return RealLambda, nMPS
 
@@ -162,7 +161,8 @@ def buildHElements(MPS, H):
     """
     AA = np.tensordot(MPS, MPS, axes=([1,0]))
     tmp = np.tensordot(H, AA, axes=([2,3], [1,3]))
-    C = np.transpose(tmp, (2, 3, 0, 1))
+    tmp = np.transpose(tmp, (2, 1, 0, 3))
+    C = np.transpose(tmp, (0, 3, 2, 1))
     #print "C\n", C
 
     return C
@@ -194,8 +194,9 @@ def linearOpForK(MPS, Lambda, K):
     """
     L = R = Lambda
     chir, chic, aux = MPS.shape
+
+    EK = linearOpForR(MPS, K).reshape(chir, chic)
     K = np.reshape(K, (chir, chic))
-    EK = linearOpForR(MPS, K.reshape(chir * chic)).reshape(chir, chic)
     trLK = np.trace(np.tensordot(L, K, axes=([1,0])))
 
     lhs = K - EK + (trLK * R)
@@ -210,13 +211,14 @@ def calcHmeanval(MPS, R, C):
     linOpWrapped = functools.partial(linearOpForK, MPS, R)
     linOpForBicg = spspla.LinearOperator((chir * chir, chic * chic), 
                                          matvec = linOpWrapped, 
-                                         dtype = 'complex128')
+                                         dtype = MPS.dtype)
     K, info = spspla.bicgstab(linOpForBicg, QHAAAAR, tol = expS, 
                               maxiter = maxIter)
     if info != 0: print "\nWARNING: bicgstab failed!\n"; exit()
 
     K = np.reshape(K, (chir, chic))
     print "QHAAAAR", QHAAAAR.shape, "K\n", K
+    exit()
 
     return K
 
