@@ -58,10 +58,8 @@ def buildLargeE(MPS):
 def getLargestW(MPS, way):
     chir, chic, aux = MPS.shape
 
-    if way == 'R':
-        linOpWrapped = functools.partial(linearOpForR, MPS)
-    else:
-        linOpWrapped = functools.partial(linearOpForL, MPS)
+    if way == 'R': linOpWrapped = functools.partial(linearOpForR, MPS)
+    else:          linOpWrapped = functools.partial(linearOpForL, MPS)
 
     linOpForEigs = spspla.LinearOperator((chir * chir, chic * chic), 
                                          matvec = linOpWrapped, 
@@ -85,6 +83,7 @@ def fixPhase(X):
 
 def symmNormalization(MPS, chir, chic):
     omega, R = getLargestW(MPS, 'R')
+    R = fixPhase(R)
     if np.isreal(R).all(): omega, R = omega.real, R.real
     print "wR", omega, np.isreal(R).all(), "R\n", R
 
@@ -96,13 +95,14 @@ def symmNormalization(MPS, chir, chic):
     Rvals_si = 1. / Rvals_s
     print "Rvals", Rvals
 
-    Rs = np.dot(Rvecs, np.dot(np.diag(Rvals_s), Rvecs.T.conj()))#Rs = spla.sqrtm(R)
+    Rs = np.dot(Rvecs, np.dot(np.diag(Rvals_s), Rvecs.T.conj()))
     ARs = np.tensordot(MPS, Rs, axes=([1,0]))
-    Rsi = np.dot(Rvecs, np.dot(np.diag(Rvals_si), Rvecs.T.conj()))#Rsi = spla.inv(Rs)
+    Rsi = np.dot(Rvecs, np.dot(np.diag(Rvals_si), Rvecs.T.conj()))
     A1 = np.tensordot(Rsi, ARs, axes=([1,0]))
     A1 = np.transpose(A1, (0, 2, 1))
 
     omega, L = getLargestW(A1, 'L')
+    L = fixPhase(L)
     if np.isreal(L).all(): omega, L = omega.real, L.real
     print "wL", omega, np.isreal(L).all(), "L\n", L
 
@@ -111,7 +111,7 @@ def symmNormalization(MPS, chir, chic):
 
     Lambda2, U = spla.eigh(L)
     A1U = np.tensordot(A1, U, axes=([1,0]))
-    A2 = np.tensordot(U.T.conj(), A1U, axes=([1,0]))#Udag = np.transpose(np.conjugate(U))
+    A2 = np.tensordot(U.T.conj(), A1U, axes=([1,0]))
     A2 = np.transpose(A2, (0, 2, 1))
     print "Lambda**2", Lambda2#, "\n", U
 
@@ -129,7 +129,7 @@ def symmNormalization(MPS, chir, chic):
     print "RealLambda", RealLambda.shape, "\n", RealLambda
 
     ######### CHECKING RESULT #########
-    Trace = np.linalg.norm(RealLambda)#trace(np.dot(RealLambda, np.conjugate(RealLambda)))
+    Trace = np.linalg.norm(RealLambda)
     ELambda = linearOpForR(nMPS, RealLambda).reshape(chir, chic)
     LambdaE = linearOpForL(nMPS, RealLambda).reshape(chir, chic)
     print "Trace(RealLambda)", Trace, "\nE|r)\n", ELambda, "\n(l|E\n", LambdaE
@@ -222,7 +222,6 @@ def calcHmeanval(MPS, R, C):
     return K
 
 def nullSpaceR(MPS, Lambda):
-    # R = np.diag(Lambda)
     AH = np.transpose(np.conjugate(MPS), (1, 0, 2))
     RR = np.tensordot(np.sqrt(Lambda), AH, axes=([1,0]))
     chir, chic, aux = RR.shape
@@ -230,11 +229,6 @@ def nullSpaceR(MPS, Lambda):
     RR = np.transpose(RR, (0, 2, 1))
     RR = np.reshape(RR, (chir * aux, chic))
     U, S, V = np.linalg.svd(RR, full_matrices=True)
-
-    #dimS, = S.shape
-    #extraS = np.zeros((chir * aux) - dimS)
-    #Sp = np.append(S, extraS, 0)
-    #maskp = (Sp < epsS) #try: np.select(...)
 
     mask = np.empty(chir * aux, dtype=bool)
     mask[:] = False; mask[chic:] = True
@@ -321,8 +315,8 @@ def doUpdateForA(MPS, B):
 """Main...
 """
 np.random.seed(9)
-d, xi = 3, 4
-maxIter, expS = 1800, 1.e-12
+d, xi = 3, 32
+maxIter, expS = 9000, 1.e-12
 dTau = 0.1
 
 xir = xic = xi
