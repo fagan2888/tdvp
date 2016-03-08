@@ -143,22 +143,17 @@ def buildLocalH():
     Returns local hamiltonian for a translation invariant system.
     The local H is a (d, d, d, d)-rank tensor.
     """
-    localH = np.zeros((d, d, d, d))
     # S = 1 (d = 3)
-    # diagonal elements
-    localH[0,0,0,0] = localH[2,2,2,2] = 1.
-    localH[0,2,0,2] = localH[2,0,2,0] = -1.
-    # nondiagonal ones
-    localH[0,1,1,0] = localH[1,0,0,1] = 1.
-    localH[0,2,1,1] = localH[1,1,0,2] = 1.
-    localH[1,1,2,0] = localH[2,0,1,1] = 1.
-    localH[1,2,2,1] = localH[2,1,1,2] = 1.
+    Sx = np.array([[0., 1., 0.], [1., 0., 1.], [0., 1., 0.]])
+    Sy = np.array([[0., -1.j, 0.], [1.j, 0., -1.j], [0., 1.j, 0.]])
+    Sz, Id = np.diag([1., 0., -1.]), np.eye(d)
+    localH = .5 * (np.kron(Sx, Sx) + np.kron(Sy, Sy)) + np.kron(Sz, Sz)
     # S = 1/2 (d = 2)
-    # localH[0,0,0,0] = localH[1,1,1,1] = 1./4.
-    # localH[0,1,0,1] = localH[1,0,1,0] = -1./4.
-    # localH[1,0,0,1] = localH[0,1,1,0] = 1./2.
+    # Sx, Sy = np.array([[0., 1.], [1., 0.]]), np.array([[0., -1.j], [1.j, 0.]])
+    # Sz, Id = np.diag([1., -1.]), np.eye(d)
+    # localH = .25 * (np.kron(Sx, Sx) + np.kron(Sy, Sy) + np.kron(Sz, Sz))
 
-    return localH
+    return localH.real.reshape(d, d, d, d)
 
 def buildHElements(MPS, H):
     """Builds the matrix elements of the hamiltonian.
