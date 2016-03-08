@@ -20,7 +20,8 @@ def powerMethod(MPS, way):
         norm = np.linalg.norm(Y)
         X = Y / norm
 
-        if np.abs(eVal - norm) < expS: return [norm], X.reshape(chir, chic)
+        if np.abs(eVal - norm) < expS:
+            return np.array([norm]), X.reshape(chir, chic)
         else: eVal = norm
 
     print "\nWARNING: powerMethod did not converge\n"
@@ -84,27 +85,39 @@ def fixPhase(X):
 
 def symmNormalization(MPS, chir, chic):
     omega, R = getLargestW(MPS, 'R')
-    print "wR", omega, "R\n", R
+    if np.isreal(R).all(): omega, R = omega.real, R.real
+    print "wR", omega, np.isreal(R).all(), "R\n", R
 
-    Rs = spla.sqrtm(R)
+    assym = np.linalg.norm(R - R.T.conj())
+    print "assym R", assym
+
+    Rvals, Rvecs = spla.eigh(R)
+    Rvals_s = np.sqrt(abs(Rvals))
+    Rvals_si = 1. / Rvals_s
+    print "Rvals", Rvals
+
+    Rs = np.dot(Rvecs, np.dot(np.diag(Rvals_s), Rvecs.T.conj()))#Rs = spla.sqrtm(R)
     ARs = np.tensordot(MPS, Rs, axes=([1,0]))
-    Rsi = spla.inv(Rs)
+    Rsi = np.dot(Rvecs, np.dot(np.diag(Rvals_si), Rvecs.T.conj()))#Rsi = spla.inv(Rs)
     A1 = np.tensordot(Rsi, ARs, axes=([1,0]))
     A1 = np.transpose(A1, (0, 2, 1))
 
     omega, L = getLargestW(A1, 'L')
-    print "wL", omega, "L\n", L
+    if np.isreal(L).all(): omega, L = omega.real, L.real
+    print "wL", omega, np.isreal(L).all(), "L\n", L
 
-    Lambda2, U = spla.eig(L)
+    assym = np.linalg.norm(L - L.T.conj())
+    print "assym L", assym
+
+    Lambda2, U = spla.eigh(L)
     A1U = np.tensordot(A1, U, axes=([1,0]))
-    Udag = np.transpose(np.conjugate(U))
-    A2 = np.tensordot(Udag, A1U, axes=([1,0]))
+    A2 = np.tensordot(U.T.conj(), A1U, axes=([1,0]))#Udag = np.transpose(np.conjugate(U))
     A2 = np.transpose(A2, (0, 2, 1))
     print "Lambda**2", Lambda2#, "\n", U
 
-    Lambda = map(np.sqrt, Lambda2)
-    Lambdas = map(np.sqrt, Lambda)
-    Lambdasi = 1. / np.asarray(Lambdas)
+    Lambda = np.sqrt(abs(Lambda2))
+    Lambdas = np.sqrt(Lambda)
+    Lambdasi = 1. / Lambdas
     A2Lsi = np.tensordot(A2, np.diag(Lambdasi), axes=([1,0]))
     A3 = np.tensordot(np.diag(Lambdas), A2Lsi, axes=([1,0]))
     A3 = np.transpose(A3, (0, 2, 1))
@@ -116,12 +129,11 @@ def symmNormalization(MPS, chir, chic):
     print "RealLambda", RealLambda.shape, "\n", RealLambda
 
     ######### CHECKING RESULT #########
-    Trace = np.trace(np.dot(RealLambda, np.conjugate(RealLambda)))
-    ELambda = linearOpForR(nMPS, RealLambda)
-    ELambda = ELambda.reshape(chir, chic)
-    LambdaE = linearOpForL(nMPS, RealLambda)
-    LambdaE = LambdaE.reshape(chir, chic)
-    print "Trace(RealLambda)", Trace, "\n", ELambda, "\n", LambdaE
+    Trace = np.linalg.norm(RealLambda)#trace(np.dot(RealLambda, np.conjugate(RealLambda)))
+    ELambda = linearOpForR(nMPS, RealLambda).reshape(chir, chic)
+    LambdaE = linearOpForL(nMPS, RealLambda).reshape(chir, chic)
+    print "Trace(RealLambda)", Trace, "\nE|r)\n", ELambda, "\n(l|E\n", LambdaE
+    exit()
 
     return RealLambda, nMPS
 
@@ -313,7 +325,7 @@ def doUpdateForA(MPS, B):
 """Main...
 """
 np.random.seed(9)
-d, xi = 3, 1
+d, xi = 3, 4
 maxIter, expS = 1800, 1.e-12
 dTau = 0.1
 
