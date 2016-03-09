@@ -318,6 +318,36 @@ def doUpdateForA(MPS, B):
 
     return nMPS
 
+def supOp(A, B, way, Op, X):
+    Bdag = np.transpose(np.conjugate(B), (1, 0, 2))
+    print "Shapes A", A.shape, "B", B.shape, "Op", Op.shape, "X", X.shape
+
+    if way == 'R':
+        XBdag = np.tensordot(X, Bdag, axes=([1,0]))
+        AXBdag = np.tensordot(A, XBdag, axes=([1,0]))
+        OpAXBdag = np.tensordot(Op, AXBdag, axes=([0,1], [3,1]))
+        print "Shape supOp R", OpAXBdag.shape
+        print OpAXBdag
+
+        return OpAXBdag
+    else:
+        XA = np.tensordot(X, A, axes=([1,0]))
+        BdagXA = np.tensordot(Bdag, XA, axes=([1,0]))
+        OpBdagXA = np.tensordot(Op, BdagXA, axes=([0,1], [1,3]))
+        print "Shape supOp L", OpBdagXA.shape
+        print OpBdagXA
+
+        return OpBdagXA
+
+def meanVals(A, Lambda):
+    R = L = Lambda
+    Sz = np.diag([1., -1.])#np.kron(np.diag([1., -1.]), np.eye(d))
+    toR = supOp(A, A, 'R', Sz, R)
+    mvSz = np.trace(np.dot(L, toR))
+    #toL = supOp(A, A, 'L', Sz, L)
+    #mvSz = np.trace(np.dot(toL, R))
+    print "<Sz>", mHz, mvSz
+
 
 
 """Main...
@@ -341,6 +371,8 @@ while I != maxIter:
 
     theL, theMPS = symmNormalization(theMPS, xir, xic)
     print "theMPS\n", theMPS, "\ntheL\n", theL
+
+    meanVals(theMPS, theL)
 
     theC = buildHElements(theMPS, theH)
     print "theC =", theC.shape
