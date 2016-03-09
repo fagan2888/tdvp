@@ -25,7 +25,7 @@ def powerMethod(MPS, way):
             return np.array([norm]), X.reshape(chir, chic)
         else: eVal = norm
 
-    print "\nWARNING: powerMethod did not converge\n"
+    print >> sys.stderr, "powerMethod: powerMethod did not converge"
     return 1234.5678, np.zeros(chir, chic)
 
 def linearOpForR(MPS, R):
@@ -69,6 +69,7 @@ def getLargestW(MPS, way):
         omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = expS, 
                                maxiter = maxIter, ncv = 12)
     except:
+        print >> sys.stderr, "getLargestW: eigs problem, trying power"
         omega, X = powerMethod(MPS, way)
     else:
         X = X.reshape(chir, chic)
@@ -215,15 +216,16 @@ def calcHmeanval(MPS, R, C):
     QHAAAAR = getQHaaaaR(MPS, R, C)
 
     linOpWrapped = functools.partial(linearOpForK, MPS, R)
-    linOpForBicg = spspla.LinearOperator((chir * chir, chic * chic), 
+    linOpForLsol = spspla.LinearOperator((chir * chir, chic * chic), 
                                          matvec = linOpWrapped, 
                                          dtype = MPS.dtype)
     try:
-        K, info = spspla.bicgstab(linOpForBicg, QHAAAAR, tol = expS, 
-                                  maxiter = maxIter)
-    except:
-        K, info = spspla.lgmres(linOpForBicg, QHAAAAR, tol = expS, 
+        K, info = spspla.lgmres(linOpForLsol, QHAAAAR, tol = expS, 
                                 maxiter = maxIter)
+    except:
+        print >> sys.stderr, "calcHmeanval: lgmres failed, trying cgs"
+        K, info = spspla.cgs(linOpForLsol, QHAAAAR, tol = expS, 
+                             maxiter = maxIter)
 
     K = np.reshape(K, (chir, chic))
     print "QHAAAAR", QHAAAAR.shape, "K\n", K
@@ -522,7 +524,7 @@ while I != maxIter:
     eta, thold = np.linalg.norm(theF), 1.e-5 if xi == 1 else 100 * expS
     print "eta", I, eta, xi, xiTilde
     if eta < thold:
-        if xiTilde < 3:
+        if xiTilde < 33:
             theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
             xi, xiTilde = xir, xiTilde * d
             print "InMain", xi, xir, xic, xiTilde, theMPS.shape
