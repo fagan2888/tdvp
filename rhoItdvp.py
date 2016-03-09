@@ -460,6 +460,16 @@ def doUpdateAndExpandA(B, B01, B10, MPS):
 
     return A, nDr, nDc
 
+def doDynamicExpansion(MPS, Lambda, C, VR, B):
+    VL = nullSpaceL(MPS, Lambda)
+
+    Y = calcYforZZs(C, Lambda, VL, VR)
+    Z01, Z10 = calcZ01andZ10(Y, MPS)
+    B01, B10 = getB01andB10(Z01, Z10, Lambda, VL, VR)
+    nA, nXir, nXic = doUpdateAndExpandA(B, B01, B10, MPS)
+
+    return nA, nXir, nXic
+
 
 
 """Main...
@@ -494,8 +504,6 @@ while I != maxIter:
 
     theVR = nullSpaceR(theMPS, theL)
     print "theVR =", theVR.shape
-    theVL = nullSpaceL(theMPS, theL)
-    print "theVL =", theVL.shape
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
     print "theF =", theF.shape
@@ -503,10 +511,7 @@ while I != maxIter:
     theB = getUpdateB(theL, theF, theVR)
     print "theB =", theB.shape
 
-    theY = calcYforZZs(theC, theL, theVL, theVR)
-    theZ01, theZ10 = calcZ01andZ10(theY, theMPS)
-    theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
-    nA, nXir, nXic = doUpdateAndExpandA(theB, theB01, theB10, theMPS)
+    theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
     break
 
     theMPS = doUpdateForA(theMPS, theB)
