@@ -150,15 +150,31 @@ def buildLocalH(Jh, Hz):
     # Sz, Id = np.diag([1., 0., -1.]), np.eye(d)
     # localH = .5 * (np.kron(Sx, Sx) + np.kron(Sy, Sy)) + np.kron(Sz, Sz)
     # S = 1/2 (d = 2)
+    dLoc = int(np.sqrt(d))
     Sx, Sy = np.array([[0., 1.], [1., 0.]]), np.array([[0., -1.j], [1.j, 0.]])
-    Sz, Id = np.diag([1., -1.]), np.eye(d)
-    # # Heisenberg chain
-    # localH = .25 * (np.kron(Sx, Sx) + np.kron(Sy, Sy) + np.kron(Sz, Sz))
+    Sz, Id = np.diag([1., -1.]), np.eye(dLoc)
     # XY + transverse field
     localH = Jh * np.kron(Sx, Sx) + Jh * np.kron(Sy, Sy) \
              + (Hz / 2.) * (np.kron(Sz, Id) + np.kron(Id, Sz))
+    # # Heisenberg chain
+    # localH = .25 * (np.kron(Sx, Sx) + np.kron(Sy, Sy) + np.kron(Sz, Sz))
+    print "theH", "dLoc", dLoc, "Jex", Jh, "Hz", Hz, "\n", localH.real
 
-    return localH.real.reshape(d, d, d, d)
+    #return localH.real.reshape(dLoc, dLoc, dLoc, dLoc)
+
+    SxId, IdSx = np.kron(Sx, Id), np.kron(Id, Sx)
+    SyId, IdSy = np.kron(Sy, Id), np.kron(Id, Sy)
+    SzId, IdSz = np.kron(Sz, Id), np.kron(Id, Sz)
+    IdId = np.kron(Id, Id)
+
+    bulkHl = Jh * np.kron(SxId, SxId) + Jh * np.kron(SyId, SyId) \
+             + (Hz / 2.) * (np.kron(SzId, IdId) + np.kron(IdId, SzId))
+    bulkHr = Jh * np.kron(IdSx, IdSx) + Jh * np.kron(IdSy, IdSy) \
+             + (Hz / 2.) * (np.kron(IdSz, IdId) + np.kron(IdId, IdSz))
+    print "Hmpo", "d", d, "Jex", Jh, "Hz", Hz, "\n", (bulkHl + bulkHr).real
+
+    return (bulkHl + bulkHr).real.reshape(d, d, d, d)
+
 
 def buildHElements(MPS, H):
     """Builds the matrix elements of the hamiltonian.
@@ -187,8 +203,8 @@ def getQHaaaaR(MPS, Lambda, C):
     h = np.trace(np.tensordot(L, HAR, axes=([1,0])))
     rhs = HAR - (h * R)
 
-    print "Energy density", I, h.real, "\nL", L.shape, "HAAAAR", HAR.shape,
-    print "rhs", rhs.shape, "rhs\n", rhs
+    print "Energy density", I, h.real, xi, xiTilde, "\nL", L.shape,
+    print "HAAAAR", HAR.shape, "rhs", rhs.shape, "rhs\n", rhs
 
     return rhs.reshape(chir * chic)
 
@@ -371,7 +387,7 @@ def supOp(A, B, way, Op, X):
 
 def meanVals(A, Lambda):
     R = L = Lambda
-    Sz = np.diag([1., -1.])#np.kron(np.diag([1., -1.]), np.eye(d))
+    Sz = np.kron(np.diag([1., -1.]), np.eye(np.sqrt(d)))
     toR = supOp(A, A, 'R', Sz, R)
     mvSz = np.trace(np.dot(L, toR))
     #toL = supOp(A, A, 'L', Sz, L)
@@ -405,7 +421,7 @@ def calcZ01andZ10(Y, MPS):
             raise
     else:
         print "S", S, "\nU", U, "\nV", V
-        __, chic, __ = MPS.shape
+        __, chic = Y.shape
         mask = (S > expS) #np.array([True] * S.shape[0])
         mask[xiTilde - chic:] = False
         U = np.compress(mask, U, 1)
@@ -485,20 +501,19 @@ def doDynamicExpansion(MPS, Lambda, C, VR, B):
 """Main...
 """
 #np.random.seed(9)
-d, xi, xiTilde = 2, 2, 4
+d, xi, xiTilde = 4, 1, 4
 Jex, mHz = 1.0, float(sys.argv[1])
-maxIter, expS, dTau = 9000, 1.e-12, 0.1
+maxIter, expS, dTau = 9000, 1.e-12, 0.001
 
 xir = xic = xi
-theMPS = np.random.rand(xir, xic, d) - .5# + 1j * np.zeros((xir, xic, d))
-#theMPS = np.random.rand(xir, xic, d) - .5 + 1j * (np.random.rand(xir, xic, d) - .5)
+theMPS = np.ones((xir, xic, d))
+#theMPS = np.random.rand(xir, xic, d) - .5# + 1j * (np.random.rand(xir, xic, d) - .5)
 print "theMPS", type(theMPS), theMPS.dtype, "\n", theMPS
 
 theH = buildLocalH(Jex, mHz)
-print "theH\n", theH.reshape(d*d, d*d)
 
 I = 0
-while I != maxIter:
+while True:#I != maxIter:
     print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
 
     theL, theMPS = symmNormalization(theMPS, xir, xic)
@@ -524,7 +539,7 @@ while I != maxIter:
     eta, thold = np.linalg.norm(theF), 1.e-5 if xi == 1 else 100 * expS
     print "eta", I, eta, xi, xiTilde
     if eta < thold:
-        if xiTilde < 33:
+        if xiTilde < 333:
             theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
             xi, xiTilde = xir, xiTilde * d
             print "InMain", xi, xir, xic, xiTilde, theMPS.shape
