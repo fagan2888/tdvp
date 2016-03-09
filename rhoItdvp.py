@@ -484,8 +484,8 @@ def doDynamicExpansion(MPS, Lambda, C, VR, B):
 
 """Main...
 """
-np.random.seed(9)
-d, xi, xiTilde = 2, 1, 2
+#np.random.seed(9)
+d, xi, xiTilde = 2, 2, 4
 Jex, mHz = 1.0, float(sys.argv[1])
 maxIter, expS, dTau = 9000, 1.e-12, 0.1
 
@@ -504,7 +504,7 @@ while I != maxIter:
     theL, theMPS = symmNormalization(theMPS, xir, xic)
     print "theMPS\n", theMPS, "\ntheL\n", theL
 
-    # meanVals(theMPS, theL)
+    meanVals(theMPS, theL)
 
     theC = buildHElements(theMPS, theH)
     print "theC =", theC.shape
