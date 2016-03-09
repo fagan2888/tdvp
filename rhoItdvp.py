@@ -387,11 +387,42 @@ def calcYforZZs(C, Lambda, VL, VR):
 
     return Y
 
+def calcZ01andZ10(Y, MPS):
+    try:
+        U, S, V = np.linalg.svd(Y, full_matrices=True)
+    except np.linalg.LinAlgError as err:
+        if 'empty' in err.message:
+            row, col = Y.shape
+            Z01 = np.array([], dtype=Y.dtype).reshape(row, 0)
+            Z10 = np.array([], dtype=Y.dtype).reshape(0, col)
+            print "Empty", Z01.shape, Z10.shape
+        else:
+            raise
+    else:
+        print "S", S, "\nU", U, "\nV", V
+        __, chic, __ = MPS.shape
+        mask = (S > expS) #np.array([True] * S.shape[0])
+        mask[xiTilde - chic:] = False
+        U = np.compress(mask, U, 1)
+        S = np.compress(mask, S, 0)
+        V = np.compress(mask, V, 0)
+
+        Ssq = np.diag(np.sqrt(S))
+        Z01 = np.dot(U, Ssq)
+        Z10 = np.dot(Ssq, V)
+        print "Fill ", U.shape, V.shape, "mask", mask
+
+    eps = np.linalg.norm(np.dot(Z01, Z10))
+    print "eps", I, eps
+
+    return Z01, Z10
+
+
 
 """Main...
 """
 np.random.seed(9)
-d, xi = 2, 48
+d, xi, xiTilde = 2, 2, 4
 Jex, mHz = 1.0, float(sys.argv[1])
 maxIter, expS, dTau = 9000, 1.e-12, 0.1
 
@@ -423,7 +454,8 @@ while I != maxIter:
     theVL = nullSpaceL(theMPS, theL)
     print "theVL =", theVL.shape
 
-    calcYforZZs(theC, theL, theVL, theVR)
+    theY = calcYforZZs(theC, theL, theVL, theVR)
+    theZ01, theZ10 = calcZ01andZ10(theY, theMPS)
     exit()
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
