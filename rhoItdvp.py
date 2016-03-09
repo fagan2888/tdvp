@@ -166,9 +166,10 @@ def buildHElements(MPS, H):
     """
     AA = np.tensordot(MPS, MPS, axes=([1,0]))
     tmp = np.tensordot(H, AA, axes=([2,3], [1,3]))
+    # C = np.transpose(tmp, (2, 3, 0, 1))
     tmp = np.transpose(tmp, (2, 1, 0, 3))
     C = np.transpose(tmp, (0, 3, 2, 1))
-    #print "C\n", C
+    print "C", C.shape, "\n", C
 
     return C
 
@@ -185,7 +186,7 @@ def getQHaaaaR(MPS, Lambda, C):
     h = np.trace(np.tensordot(L, HAR, axes=([1,0])))
     rhs = HAR - (h * R)
 
-    print "Energy density", h, "\nL", L.shape, "HAAAAR", HAR.shape,
+    print "Energy density", I, h.real, "\nL", L.shape, "HAAAAR", HAR.shape,
     print "rhs", rhs.shape, "rhs\n", rhs
 
     return rhs.reshape(chir * chic)
@@ -378,11 +379,13 @@ def meanVals(A, Lambda):
 def calcYforZZs(C, Lambda, VL, VR):
     VLdag = np.transpose(np.conjugate(VL), (1, 0, 2))
     VRdag = np.transpose(np.conjugate(VR), (1, 0, 2))
+    L_s = R_s = np.sqrt(Lambda)
+    # print "Lambda Lala\n", Lambda, "\nL_s\n", L_s, "\nC\n", C
 
-    rSiVRdag = np.tensordot(np.sqrt(Lambda), VRdag, axes=([1,0]))
-    CrSiVRdag = np.tensordot(C, rSiVRdag, axes=([1,3], [0,2]))
-    lSiCrSiVRdag = np.tensordot(np.sqrt(Lambda), CrSiVRdag, axes=([1,0]))
-    Y = np.tensordot(VLdag, lSiCrSiVRdag, axes=([1,2], [0,1]))
+    RsVRdag = np.tensordot(R_s, VRdag, axes=([1,0]))
+    CRsVRdag = np.tensordot(C, RsVRdag, axes=([1,3], [0,2]))
+    LsCRsVRdag = np.tensordot(L_s, CRsVRdag, axes=([1,0]))
+    Y = np.tensordot(VLdag, LsCRsVRdag, axes=([1,2], [0,1]))
     print "theY", Y.shape, "\n", Y
 
     return Y
@@ -414,11 +417,13 @@ def calcZ01andZ10(Y, MPS):
 
     eps = np.linalg.norm(np.dot(Z01, Z10))
     print "eps", I, eps
+    print "\nZ01", Z01.shape, "\n", Z01, "\nZ10", Z10.shape, "\n", Z10
 
     return Z01, Z10
 
 def getB01andB10(Z01, Z10, Lambda, VL, VR):
     L_si = R_si = np.diag(1. / np.sqrt(np.diag(Lambda)))
+    # print "Lambda_si\n", L_si
 
     row, col = Z01.shape
     if row * col == 0:
@@ -440,16 +445,17 @@ def getB01andB10(Z01, Z10, Lambda, VL, VR):
     else:
         z10VR = np.tensordot(Z10, VR, axes=([1,0]))
         B10 = np.tensordot(z10VR, R_si, axes=([1,0]))
-        B10 = np.transpose(B01, (0, 2, 1))
+        B10 = np.transpose(B10, (0, 2, 1))
 
     print "Done10", R_si.shape, VR.shape, Z10.shape, B10.shape
+    print "B01\n", B01, "\nB10\n", B10
 
     return B01, B10
 
 def doUpdateAndExpandA(B, B01, B10, MPS):
     rB, cB, aB = B.shape
-    rB01, cB01, aB01 = B01.shape
-    rB10, cB10, aB10 = B10.shape
+    rB01, cB01, __ = B01.shape
+    rB10, cB10, __ = B10.shape
 
     A = np.zeros((rB + rB10, cB + cB01, aB), dtype=B.dtype)
     A[:rB, :cB, :] = MPS - dTau * B
@@ -467,6 +473,8 @@ def doDynamicExpansion(MPS, Lambda, C, VR, B):
     Z01, Z10 = calcZ01andZ10(Y, MPS)
     B01, B10 = getB01andB10(Z01, Z10, Lambda, VL, VR)
     nA, nXir, nXic = doUpdateAndExpandA(B, B01, B10, MPS)
+    print "hex(MPS)", hex(id(MPS)), "hex(newA)", hex(id(nA))
+    print "Before", MPS.shape, "After ", nA.shape
 
     return nA, nXir, nXic
 
@@ -494,7 +502,7 @@ while I != maxIter:
     theL, theMPS = symmNormalization(theMPS, xir, xic)
     print "theMPS\n", theMPS, "\ntheL\n", theL
 
-    meanVals(theMPS, theL)
+    # meanVals(theMPS, theL)
 
     theC = buildHElements(theMPS, theH)
     print "theC =", theC.shape
@@ -518,7 +526,6 @@ while I != maxIter:
             theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
             xi, xiTilde = xiTilde, xiTilde * d
             print "InMain", theMPS.shape
-            break
         else:
             break
     else:
