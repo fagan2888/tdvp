@@ -446,6 +446,20 @@ def getB01andB10(Z01, Z10, Lambda, VL, VR):
 
     return B01, B10
 
+def doUpdateAndExpandA(B, B01, B10, MPS):
+    rB, cB, aB = B.shape
+    rB01, cB01, aB01 = B01.shape
+    rB10, cB10, aB10 = B10.shape
+
+    A = np.zeros((rB + rB10, cB + cB01, aB), dtype=B.dtype)
+    A[:rB, :cB, :] = MPS - dTau * B
+    A[:rB01, cB:, :] = np.sqrt(dTau) * B01
+    A[rB:, :cB10, :] = - np.sqrt(dTau) * B10
+    nDr, nDc, __ = A.shape
+    print "Expanding", B.shape, B01.shape, B10.shape, A.shape, "\n", A
+
+    return A, nDr, nDc
+
 
 
 """Main...
@@ -483,16 +497,17 @@ while I != maxIter:
     theVL = nullSpaceL(theMPS, theL)
     print "theVL =", theVL.shape
 
-    theY = calcYforZZs(theC, theL, theVL, theVR)
-    theZ01, theZ10 = calcZ01andZ10(theY, theMPS)
-    theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
-    exit()
-
     theF = calcFs(theMPS, theC, theL, theK, theVR)
     print "theF =", theF.shape
 
     theB = getUpdateB(theL, theF, theVR)
     print "theB =", theB.shape
+
+    theY = calcYforZZs(theC, theL, theVL, theVR)
+    theZ01, theZ10 = calcZ01andZ10(theY, theMPS)
+    theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
+    nA, nXir, nXic = doUpdateAndExpandA(theB, theB01, theB10, theMPS)
+    break
 
     theMPS = doUpdateForA(theMPS, theB)
 
