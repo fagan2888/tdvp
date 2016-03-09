@@ -417,7 +417,7 @@ def calcZ01andZ10(Y, MPS):
 
     eps = np.linalg.norm(np.dot(Z01, Z10))
     print "eps", I, eps
-    print "\nZ01", Z01.shape, "\n", Z01, "\nZ10", Z10.shape, "\n", Z10
+    print "Z01", Z01.shape, "\n", Z01, "\nZ10", Z10.shape, "\n", Z10
 
     return Z01, Z10
 
@@ -519,13 +519,13 @@ while I != maxIter:
     theB = getUpdateB(theL, theF, theVR)
     print "theB =", theB.shape
 
-    eta = np.linalg.norm(theF)
+    eta, thold = np.linalg.norm(theF), 1.e-5 if xi == 1 else 100 * expS
     print "eta", I, eta, xi, xiTilde
-    if eta < 100 * expS:
+    if eta < thold:
         if xiTilde < 3:
             theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
-            xi, xiTilde = xiTilde, xiTilde * d
-            print "InMain", theMPS.shape
+            xi, xiTilde = xir, xiTilde * d
+            print "InMain", xi, xir, xic, xiTilde, theMPS.shape
         else:
             break
     else:
