@@ -5,6 +5,7 @@ import scipy.sparse.linalg as spspla
 import scipy.linalg as spla
 import functools
 import cmath
+import sys
 
 np.set_printoptions(suppress=True)#, precision=3)
 
@@ -136,21 +137,25 @@ def symmNormalization(MPS, chir, chic):
 
     return RealLambda, nMPS
 
-def buildLocalH():
+def buildLocalH(Jh, Hz):
     """Builds local hamiltonian (d x d)-matrix.
 
     Returns local hamiltonian for a translation invariant system.
     The local H is a (d, d, d, d)-rank tensor.
     """
     # S = 1 (d = 3)
-    Sx = np.array([[0., 1., 0.], [1., 0., 1.], [0., 1., 0.]])
-    Sy = np.array([[0., -1.j, 0.], [1.j, 0., -1.j], [0., 1.j, 0.]])
-    Sz, Id = np.diag([1., 0., -1.]), np.eye(d)
-    localH = .5 * (np.kron(Sx, Sx) + np.kron(Sy, Sy)) + np.kron(Sz, Sz)
+    # Sx = np.array([[0., 1., 0.], [1., 0., 1.], [0., 1., 0.]])
+    # Sy = np.array([[0., -1.j, 0.], [1.j, 0., -1.j], [0., 1.j, 0.]])
+    # Sz, Id = np.diag([1., 0., -1.]), np.eye(d)
+    # localH = .5 * (np.kron(Sx, Sx) + np.kron(Sy, Sy)) + np.kron(Sz, Sz)
     # S = 1/2 (d = 2)
-    # Sx, Sy = np.array([[0., 1.], [1., 0.]]), np.array([[0., -1.j], [1.j, 0.]])
-    # Sz, Id = np.diag([1., -1.]), np.eye(d)
+    Sx, Sy = np.array([[0., 1.], [1., 0.]]), np.array([[0., -1.j], [1.j, 0.]])
+    Sz, Id = np.diag([1., -1.]), np.eye(d)
+    # # Heisenberg chain
     # localH = .25 * (np.kron(Sx, Sx) + np.kron(Sy, Sy) + np.kron(Sz, Sz))
+    # XY + transverse field
+    localH = Jh * np.kron(Sx, Sx) + Jh * np.kron(Sy, Sy) \
+             + (Hz / 2.) * (np.kron(Sz, Id) + np.kron(Id, Sz))
 
     return localH.real.reshape(d, d, d, d)
 
@@ -212,9 +217,12 @@ def calcHmeanval(MPS, R, C):
     linOpForBicg = spspla.LinearOperator((chir * chir, chic * chic), 
                                          matvec = linOpWrapped, 
                                          dtype = MPS.dtype)
-    K, info = spspla.bicgstab(linOpForBicg, QHAAAAR, tol = expS, 
-                              maxiter = maxIter)
-    if info != 0: print "\nWARNING: bicgstab failed!\n"; exit()
+    try:
+        K, info = spspla.bicgstab(linOpForBicg, QHAAAAR, tol = expS, 
+                                  maxiter = maxIter)
+    except:
+        K, info = spspla.lgmres(linOpForBicg, QHAAAAR, tol = expS, 
+                                maxiter = maxIter)
 
     K = np.reshape(K, (chir, chic))
     print "QHAAAAR", QHAAAAR.shape, "K\n", K
@@ -315,16 +323,16 @@ def doUpdateForA(MPS, B):
 """Main...
 """
 np.random.seed(9)
-d, xi = 3, 32
-maxIter, expS = 9000, 1.e-12
-dTau = 0.1
+d, xi = 2, 48
+Jex, mHz = 1.0, float(sys.argv[1])
+maxIter, expS, dTau = 9000, 1.e-12, 0.1
 
 xir = xic = xi
 theMPS = np.random.rand(xir, xic, d) - .5# + 1j * np.zeros((xir, xic, d))
 #theMPS = np.random.rand(xir, xic, d) - .5 + 1j * (np.random.rand(xir, xic, d) - .5)
 print "theMPS", type(theMPS), theMPS.dtype, "\n", theMPS
 
-theH = buildLocalH()
+theH = buildLocalH(Jex, mHz)
 print "theH\n", theH.reshape(d*d, d*d)
 
 I = 0
