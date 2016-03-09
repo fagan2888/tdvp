@@ -256,6 +256,33 @@ def nullSpaceR(MPS, Lambda):
 
     return tmp
 
+def nullSpaceL(MPS, Lambda):
+    AH = np.transpose(np.conjugate(MPS), (1, 0, 2))
+    LL = np.tensordot(AH, np.sqrt(Lambda), axes=([1,0]))
+    chir, aux, chic = LL.shape
+
+    LL = np.reshape(LL, (chir, aux * chic))
+    U, S, V = np.linalg.svd(LL, full_matrices=True)
+
+    mask = np.empty(aux * chic, dtype=bool)
+    mask[:] = False; mask[chir:] = True
+    VLdag = np.compress(mask, V, axis=0)
+
+    LL = np.conjugate(np.transpose(LL))
+    Null = np.tensordot(VLdag, LL, axes=([1,0]))
+    Id = np.tensordot(VLdag, VLdag.T.conj(), axes=([1,0]))
+
+    tmp = np.conjugate(VLdag.T)
+    lpr, lmz = tmp.shape
+    tmp = np.reshape(tmp, (aux, chic, lmz))
+    tmp = np.transpose(np.transpose(tmp, (2, 1, 0)), (1, 0, 2))
+
+    print "mask =", mask, "\n", S, "\nV\n", V, "\nVLdag\n", VLdag, \
+        "\nNull\n", Null, "\nV+V\n", Id#, "\nVL =", tmp.shape
+    del U, S, V, VLdag, Null, Id
+
+    return tmp
+
 def calcFs(MPS, C, Lambda, K, VR):
     VRdag = np.transpose(np.conjugate(VR), (1, 0, 2))
     Ld = np.diag(Lambda)
@@ -382,6 +409,8 @@ while I != maxIter:
 
     theVR = nullSpaceR(theMPS, theL)
     print "theVR =", theVR.shape
+    theVL = nullSpaceL(theMPS, theL)
+    print "theVL =", theVL.shape
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
     print "theF =", theF.shape
