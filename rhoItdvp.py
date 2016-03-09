@@ -375,6 +375,17 @@ def meanVals(A, Lambda):
     #mvSz = np.trace(np.dot(toL, R))
     print "<Sz>", mHz, mvSz
 
+def calcYforZZs(C, Lambda, VL, VR):
+    VLdag = np.transpose(np.conjugate(VL), (1, 0, 2))
+    VRdag = np.transpose(np.conjugate(VR), (1, 0, 2))
+
+    rSiVRdag = np.tensordot(np.sqrt(Lambda), VRdag, axes=([1,0]))
+    CrSiVRdag = np.tensordot(C, rSiVRdag, axes=([1,3], [0,2]))
+    lSiCrSiVRdag = np.tensordot(np.sqrt(Lambda), CrSiVRdag, axes=([1,0]))
+    Y = np.tensordot(VLdag, lSiCrSiVRdag, axes=([1,2], [0,1]))
+    print "theY", Y.shape, "\n", Y
+
+    return Y
 
 
 """Main...
@@ -411,6 +422,9 @@ while I != maxIter:
     print "theVR =", theVR.shape
     theVL = nullSpaceL(theMPS, theL)
     print "theVL =", theVL.shape
+
+    calcYforZZs(theC, theL, theVL, theVR)
+    exit()
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
     print "theF =", theF.shape
