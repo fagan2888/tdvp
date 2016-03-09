@@ -475,7 +475,7 @@ def doDynamicExpansion(MPS, Lambda, C, VR, B):
 """Main...
 """
 np.random.seed(9)
-d, xi, xiTilde = 2, 2, 4
+d, xi, xiTilde = 2, 1, 2
 Jex, mHz = 1.0, float(sys.argv[1])
 maxIter, expS, dTau = 9000, 1.e-12, 0.1
 
@@ -511,12 +511,17 @@ while I != maxIter:
     theB = getUpdateB(theL, theF, theVR)
     print "theB =", theB.shape
 
-    theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
-    break
-
-    theMPS = doUpdateForA(theMPS, theB)
-
     eta = np.linalg.norm(theF)
-    print "eta", I, eta
-    if eta < 100 * expS: break
+    print "eta", I, eta, xi, xiTilde
+    if eta < 100 * expS:
+        if xiTilde < 3:
+            theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
+            xi, xiTilde = xiTilde, xiTilde * d
+            print "InMain", theMPS.shape
+            break
+        else:
+            break
+    else:
+        theMPS = doUpdateForA(theMPS, theB)
+
     I += 1
