@@ -417,6 +417,35 @@ def calcZ01andZ10(Y, MPS):
 
     return Z01, Z10
 
+def getB01andB10(Z01, Z10, Lambda, VL, VR):
+    L_si = R_si = np.diag(1. / np.sqrt(np.diag(Lambda)))
+
+    row, col = Z01.shape
+    if row * col == 0:
+        row, __ = Lambda.shape
+        __, __, aux = VL.shape
+        B01 = np.array([], dtype=Z01.dtype).reshape(row, col, aux)
+    else:
+        L_siVL = np.tensordot(L_si, VL, axes=([1,0]))
+        B01 = np.tensordot(L_siVL, Z01, axes=([1,0]))
+        B01 = np.transpose(B01, (0, 2, 1))
+
+    print "Done01", L_si.shape, VL.shape, Z01.shape, B01.shape
+
+    row, col = Z10.shape
+    if row * col == 0:
+        __, col = Lambda.shape
+        __, __, aux = VR.shape
+        B10 = np.array([], dtype=Z10.dtype).reshape(row, col, aux)
+    else:
+        z10VR = np.tensordot(Z10, VR, axes=([1,0]))
+        B10 = np.tensordot(z10VR, R_si, axes=([1,0]))
+        B10 = np.transpose(B01, (0, 2, 1))
+
+    print "Done10", R_si.shape, VR.shape, Z10.shape, B10.shape
+
+    return B01, B10
+
 
 
 """Main...
@@ -456,6 +485,7 @@ while I != maxIter:
 
     theY = calcYforZZs(theC, theL, theVL, theVR)
     theZ01, theZ10 = calcZ01andZ10(theY, theMPS)
+    theB01, theB10 = getB01andB10(theZ01, theZ10, theL, theVL, theVR)
     exit()
 
     theF = calcFs(theMPS, theC, theL, theK, theVR)
