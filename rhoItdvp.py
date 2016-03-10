@@ -27,7 +27,7 @@ def powerMethod(MPS, way):
         else: eVal = norm
 
     print >> sys.stderr, "powerMethod: powerMethod did not converge"
-    return 1234.5678, np.zeros(chir, chic)
+    return np.array([norm]), X.reshape(chir, chic)
 
 def linearOpForR(MPS, R):
     chir, chic, aux = MPS.shape
@@ -427,9 +427,9 @@ def calcZ01andZ10(Y, MPS):
             raise
     else:
         print "S", S, "\nU", U, "\nV", V
-        __, chic = Y.shape
+        __, chi, __ = MPS.shape
         mask = (S > expS) #np.array([True] * S.shape[0])
-        mask[xiTilde - chic:] = False
+        mask[xiTilde - chi:] = False
         U = np.compress(mask, U, 1)
         S = np.compress(mask, S, 0)
         V = np.compress(mask, V, 0)
