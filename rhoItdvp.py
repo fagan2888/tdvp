@@ -1,4 +1,5 @@
-#!/usr/bin/python
+#!/opt/local/bin/python2.7
+# #!/usr/bin/python
 
 import numpy as np
 import scipy.sparse.linalg as spspla
@@ -84,6 +85,8 @@ def fixPhase(X):
     return Y
 
 def symmNormalization(MPS, chir, chic):
+    print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
+
     omega, R = getLargestW(MPS, 'R')
     R = fixPhase(R)
     if np.isreal(R).all(): omega, R = omega.real, R.real
@@ -129,6 +132,7 @@ def symmNormalization(MPS, chir, chic):
     RealLambda = fixPhase(np.diag(Lambda))
     #print "nMPS", nMPS.shape, "\n", nMPS
     print "RealLambda", RealLambda.shape, "\n", RealLambda
+    print "Finite", np.isfinite(nMPS).all(), np.isfinite(RealLambda).all()
 
     ######### CHECKING RESULT #########
     Trace = np.linalg.norm(RealLambda)
@@ -236,15 +240,17 @@ def calcHmeanval(MPS, R, C):
                                          matvec = linOpWrapped, 
                                          dtype = MPS.dtype)
     try:
-        K, info = spspla.lgmres(linOpForLsol, QHAAAAR, tol = expS, 
+        K, info = spspla.lgmres(linOpForLsol, QHAAAAR, tol = 100*expS, 
                                 maxiter = maxIter)
+        K, info = spspla.gmres(linOpForLsol, QHAAAAR, tol = expS, x0 = K, 
+                               maxiter = maxIter)
     except:
-        print >> sys.stderr, "calcHmeanval: lgmres failed, trying cgs"
-        K, info = spspla.cgs(linOpForLsol, QHAAAAR, tol = expS, 
-                             maxiter = maxIter)
+        print >> sys.stderr, "calcHmeanval: lgmres failed, trying gmres"
+        K, info = spspla.gmres(linOpForLsol, QHAAAAR, tol = expS, 
+                               maxiter = maxIter)
 
     K = np.reshape(K, (chir, chic))
-    print "QHAAAAR", QHAAAAR.shape, "K\n", K
+    print "QHAAAAR", QHAAAAR.shape, "info", info, np.isfinite(K).all(), "K\n", K
 
     return K
 
@@ -255,7 +261,7 @@ def nullSpaceR(MPS, Lambda):
 
     RR = np.transpose(RR, (0, 2, 1))
     RR = np.reshape(RR, (chir * aux, chic))
-    U, S, V = np.linalg.svd(RR, full_matrices=True)
+    U, S, V = spla.svd(RR, full_matrices=True)
 
     mask = np.empty(chir * aux, dtype=bool)
     mask[:] = False; mask[chic:] = True
@@ -281,7 +287,7 @@ def nullSpaceL(MPS, Lambda):
     chir, aux, chic = LL.shape
 
     LL = np.reshape(LL, (chir, aux * chic))
-    U, S, V = np.linalg.svd(LL, full_matrices=True)
+    U, S, V = spla.svd(LL, full_matrices=True)
 
     mask = np.empty(aux * chic, dtype=bool)
     mask[:] = False; mask[chir:] = True
@@ -410,8 +416,8 @@ def calcYforZZs(C, Lambda, VL, VR):
 
 def calcZ01andZ10(Y, MPS):
     try:
-        U, S, V = np.linalg.svd(Y, full_matrices=True)
-    except np.linalg.LinAlgError as err:
+        U, S, V = spla.svd(Y, full_matrices=True)
+    except spla.LinAlgError as err:
         if 'empty' in err.message:
             row, col = Y.shape
             Z01 = np.array([], dtype=Y.dtype).reshape(row, 0)
@@ -503,7 +509,7 @@ def doDynamicExpansion(MPS, Lambda, C, VR, B):
 #np.random.seed(9)
 d, xi, xiTilde = 4, 1, 4
 Jex, mHz = 1.0, float(sys.argv[1])
-maxIter, expS, dTau = 9000, 1.e-12, 0.001
+I, maxIter, expS, dTau = 0, 9000, 1.e-12, 0.1
 
 xir = xic = xi
 theMPS = np.ones((xir, xic, d))
@@ -512,10 +518,7 @@ print "theMPS", type(theMPS), theMPS.dtype, "\n", theMPS
 
 theH = buildLocalH(Jex, mHz)
 
-I = 0
 while True:#I != maxIter:
-    print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
-
     theL, theMPS = symmNormalization(theMPS, xir, xic)
     print "theMPS\n", theMPS, "\ntheL\n", theL
 
