@@ -13,7 +13,8 @@ np.set_printoptions(suppress=True)#, precision=3)
 def powerMethod(MPS, way, guess=None):
     eVal = 1234.5678
     chir, chic, aux = MPS.shape
-    if guess is None: X = np.random.rand(chir * chic) - .5
+    if guess is None or not guess.size: X = np.random.rand(chir * chic) - .5
+    else: print "guess", guess.shape, guess.size, "\n", guess
 
     for q in range(maxIter):
         if way == 'R': Y = linearOpForR(MPS, X)
@@ -149,7 +150,8 @@ def symmNormalization(MPS, chir, chic):
     Trace = np.linalg.norm(RealLambda)
     ELambda = linearOpForR(nMPS, RealLambda).reshape(chir, chic)
     LambdaE = linearOpForL(nMPS, RealLambda).reshape(chir, chic)
-    print "Trace(RealLambda)", Trace, "\nE|r)\n", ELambda, "\n(l|E\n", LambdaE
+    print "Trace(RealLambda)", Trace, "E|r)-|r)", np.linalg.norm(ELambda - RealLambda),
+    print "(l|E-(l|", np.linalg.norm(LambdaE - RealLambda)
 
     return RealLambda, nMPS
 
@@ -165,7 +167,7 @@ def buildLocalH(Jh, Hz):
     # Sz, Id = np.diag([1., 0., -1.]), np.eye(d)
     # localH = .5 * (np.kron(Sx, Sx) + np.kron(Sy, Sy)) + np.kron(Sz, Sz)
     # S = 1/2 (d = 2)
-    dLoc = int(np.sqrt(d))
+    dLoc = d#int(np.sqrt(d))
     Sx, Sy = np.array([[0., 1.], [1., 0.]]), np.array([[0., -1.j], [1.j, 0.]])
     Sz, Id = np.diag([1., -1.]), np.eye(dLoc)
     # XY + transverse field
@@ -175,7 +177,7 @@ def buildLocalH(Jh, Hz):
     # localH = .25 * (np.kron(Sx, Sx) + np.kron(Sy, Sy) + np.kron(Sz, Sz))
     print "theH", "dLoc", dLoc, "Jex", Jh, "Hz", Hz, "\n", localH.real
 
-    #return localH.real.reshape(dLoc, dLoc, dLoc, dLoc)
+    return localH.real.reshape(dLoc, dLoc, dLoc, dLoc)
 
     SxId, IdSx = np.kron(Sx, Id), np.kron(Id, Sx)
     SyId, IdSy = np.kron(Sy, Id), np.kron(Id, Sy)
@@ -260,7 +262,7 @@ def calcHmeanval(MPS, R, C):
         K, info = spspla.gmres(linOpForLsol, QHAAAAR, tol = expS, 
                                maxiter = maxIter)
     if info != 0:
-        print >> sys.stderr, "calcHmeanval: error", I, "lgmres and gmres failed"
+        print >> sys.stderr, "calcHmeanval: Error", I, "lgmres and gmres failed"
 
     K = np.reshape(K, (chir, chic))
     print "QHAAAAR", QHAAAAR.shape, "info", info, np.isfinite(K).all(), "K\n", K
@@ -414,7 +416,7 @@ def supOp(A, B, way, Op, X):
 
 def meanVals(A, Lambda):
     R = L = Lambda
-    Sz = np.kron(np.diag([1., -1.]), np.eye(np.sqrt(d)))
+    Sz = np.diag([1., -1.])#np.kron(np.diag([1., -1.]), np.eye(np.sqrt(d)))
     toR = supOp(A, A, 'R', Sz, R)
     mvSz = np.trace(np.dot(L, toR))
     #toL = supOp(A, A, 'L', Sz, L)
@@ -528,14 +530,14 @@ def doDynamicExpansion(MPS, Lambda, C, VR, B):
 
 """Main...
 """
-#np.random.seed(9)
-d, xi, xiTilde = 4, 1, 4
+np.random.seed(9)
+d, xi, xiTilde = 2, 1, 2
 Jex, mHz = 1.0, float(sys.argv[1])
 I, maxIter, expS, dTau = 0, 9000, 1.e-12, 0.1
 
 xir = xic = xi
 theMPS = np.ones((xir, xic, d))
-#theMPS = np.random.rand(xir, xic, d) - .5# + 1j * (np.random.rand(xir, xic, d) - .5)
+theMPS = np.random.rand(xir, xic, d) - .5# + 1j * (np.random.rand(xir, xic, d) - .5)
 print "theMPS", type(theMPS), theMPS.dtype, "\n", theMPS
 
 theH = buildLocalH(Jex, mHz)
@@ -564,7 +566,7 @@ while True:#I != maxIter:
     eta, thold = np.linalg.norm(theF), 1.e-5 if xi == 1 else 100 * expS
     print "eta", I, eta, xi, xiTilde
     if eta < thold:
-        if xiTilde < 333:
+        if xiTilde < 33:
             theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
             xi, xiTilde = xir, xiTilde * d
             print "InMain", xi, xir, xic, xiTilde, theMPS.shape
