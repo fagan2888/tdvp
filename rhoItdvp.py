@@ -69,9 +69,12 @@ def getLargestW(MPS, way):
     try:
         omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = expS, 
                                maxiter = maxIter, ncv = 12)
-    except spla.ArpackNoConvergence as err:
+    except spspla.ArpackNoConvergence as err:
         print >> sys.stderr, "getLargestW: Error", I, err
         omega, X = powerMethod(MPS, way, err.eigenvectors)
+    except ValueError as err:
+        print >> sys.stderr, "getLargestW: Error", I, err
+        omega, X = powerMethod(MPS, way)
     else:
         X = X.reshape(chir, chic)
 
@@ -253,7 +256,7 @@ def calcHmeanval(MPS, R, C):
     if info > 0:
         K, info = spspla.gmres(linOpForLsol, QHAAAAR, tol = expS, x0 = K, 
                                maxiter = maxIter)
-    else if info < 0:
+    elif info < 0:
         K, info = spspla.gmres(linOpForLsol, QHAAAAR, tol = expS, 
                                maxiter = maxIter)
     if info != 0:
