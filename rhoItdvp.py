@@ -10,10 +10,10 @@ import sys
 
 np.set_printoptions(suppress=True)#, precision=3)
 
-def powerMethod(MPS, way):
+def powerMethod(MPS, way, guess=None):
     eVal = 1234.5678
     chir, chic, aux = MPS.shape
-    X = np.random.rand(chir * chic) - .5
+    if guess is None: X = np.random.rand(chir * chic) - .5
 
     for q in range(maxIter):
         if way == 'R': Y = linearOpForR(MPS, X)
@@ -22,11 +22,11 @@ def powerMethod(MPS, way):
         norm = np.linalg.norm(Y)
         X = Y / norm
 
-        if np.abs(eVal - norm) < expS:
+        if abs(eVal - norm) < expS:
             return np.array([norm]), X.reshape(chir, chic)
         else: eVal = norm
 
-    print >> sys.stderr, "powerMethod: powerMethod did not converge"
+    print >> sys.stderr, "powerMethod: Error powerMethod did not converge"
     return np.array([norm]), X.reshape(chir, chic)
 
 def linearOpForR(MPS, R):
@@ -69,9 +69,9 @@ def getLargestW(MPS, way):
     try:
         omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = expS, 
                                maxiter = maxIter, ncv = 12)
-    except:
-        print >> sys.stderr, "getLargestW: eigs problem, trying power"
-        omega, X = powerMethod(MPS, way)
+    except spla.ArpackNoConvergence as err:
+        print >> sys.stderr, "getLargestW: Error", I, err
+        omega, X = powerMethod(MPS, way, err.eigenvectors)
     else:
         X = X.reshape(chir, chic)
 
@@ -95,7 +95,11 @@ def symmNormalization(MPS, chir, chic):
     assym = np.linalg.norm(R - R.T.conj())
     print "assym R", assym
 
-    Rvals, Rvecs = spla.eigh(R)
+    try:
+        Rvals, Rvecs = spla.eigh(R)
+    except spla.LinAlgError as err:
+        print >> sys.stderr, "symmNormalization: Error R", I, err
+
     Rvals_s = np.sqrt(abs(Rvals))
     Rvals_si = 1. / Rvals_s
     print "Rvals", Rvals
@@ -114,7 +118,11 @@ def symmNormalization(MPS, chir, chic):
     assym = np.linalg.norm(L - L.T.conj())
     print "assym L", assym
 
-    Lambda2, U = spla.eigh(L)
+    try:
+        Lambda2, U = spla.eigh(L)
+    except spla.LinAlgError as err:
+        print >> sys.stderr, "symmNormalization: Error L", I, err
+
     A1U = np.tensordot(A1, U, axes=([1,0]))
     A2 = np.tensordot(U.T.conj(), A1U, axes=([1,0]))
     A2 = np.transpose(A2, (0, 2, 1))
@@ -239,15 +247,17 @@ def calcHmeanval(MPS, R, C):
     linOpForLsol = spspla.LinearOperator((chir * chir, chic * chic), 
                                          matvec = linOpWrapped, 
                                          dtype = MPS.dtype)
-    try:
-        K, info = spspla.lgmres(linOpForLsol, QHAAAAR, tol = 100*expS, 
-                                maxiter = maxIter)
+
+    K, info = spspla.lgmres(linOpForLsol, QHAAAAR, tol = expS, 
+                            maxiter = maxIter)
+    if info > 0:
         K, info = spspla.gmres(linOpForLsol, QHAAAAR, tol = expS, x0 = K, 
                                maxiter = maxIter)
-    except:
-        print >> sys.stderr, "calcHmeanval: lgmres failed, trying gmres"
+    else if info < 0:
         K, info = spspla.gmres(linOpForLsol, QHAAAAR, tol = expS, 
                                maxiter = maxIter)
+    if info != 0:
+        print >> sys.stderr, "calcHmeanval: error", I, "lgmres and gmres failed"
 
     K = np.reshape(K, (chir, chic))
     print "QHAAAAR", QHAAAAR.shape, "info", info, np.isfinite(K).all(), "K\n", K
@@ -261,7 +271,11 @@ def nullSpaceR(MPS, Lambda):
 
     RR = np.transpose(RR, (0, 2, 1))
     RR = np.reshape(RR, (chir * aux, chic))
-    U, S, V = spla.svd(RR, full_matrices=True)
+
+    try:
+        U, S, V = spla.svd(RR, full_matrices=True)
+    except spla.LinAlgError as err:
+        print >> sys.stderr, "nullSpaceR: Error", I, err
 
     mask = np.empty(chir * aux, dtype=bool)
     mask[:] = False; mask[chic:] = True
@@ -287,7 +301,11 @@ def nullSpaceL(MPS, Lambda):
     chir, aux, chic = LL.shape
 
     LL = np.reshape(LL, (chir, aux * chic))
-    U, S, V = spla.svd(LL, full_matrices=True)
+
+    try:
+        U, S, V = spla.svd(LL, full_matrices=True)
+    except spla.LinAlgError as err:
+        print >> sys.stderr, "nullSpaceL: Error", I, err
 
     mask = np.empty(aux * chic, dtype=bool)
     mask[:] = False; mask[chir:] = True
@@ -424,6 +442,7 @@ def calcZ01andZ10(Y, MPS):
             Z10 = np.array([], dtype=Y.dtype).reshape(0, col)
             print "Empty", Z01.shape, Z10.shape
         else:
+            print >> sys.stderr, "calcZ01andZ10: Error", I, err
             raise
     else:
         print "S", S, "\nU", U, "\nV", V
