@@ -88,6 +88,78 @@ def fixPhase(X):
 
     return Y
 
+def symmNormNew(MPS, chir, chic, thld = 1.e-10):
+    print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
+
+    omega, R = getLargestW(MPS, 'R')
+    R = fixPhase(R)
+    if np.isreal(R).all(): omega, R = omega.real, R.real
+    print "wR", omega, np.isreal(R).all(), "R\n", R
+
+    assym = np.linalg.norm(R - R.T.conj())
+    print "assym R", I, assym
+
+    try:
+        Rvals, Rvecs = spla.eigh(R)
+    except spla.LinAlgError as err:
+        print >> sys.stderr, "symmNormalization: Error R", I, err
+
+    print "Rvals", Rvals
+    noZeros = np.count_nonzero(Rvals > thld)
+    Rvals[:Rvals.size - noZeros] = 0.
+    Rvals_s = np.sqrt(Rvals)
+    Rvals_si = np.zeros(Rvals.shape, dtype=Rvals.dtype)
+    Rvals_si[-noZeros:] = 1. / Rvals_s[-noZeros:]
+
+    right = np.dot(Rvecs, np.diag(Rvals_s))
+    left = np.dot(np.diag(Rvals_si), Rvecs.conj().T)
+    B = np.tensordot(left, MPS, axes=([1,0]))
+    B = np.tensordot(B, right, axes=([1,0]))
+    B = np.transpose(B, (0, 2, 1))
+    B /= np.sqrt(omega)
+    print "Rvals", Rvals, "\nRvals_s", Rvals_s, "\nRvals_si", Rvals_si
+
+    omega, L = getLargestW(B, 'L')
+    L = fixPhase(L)
+    if np.isreal(L).all(): omega, L = omega.real, L.real
+    print "wL", omega, np.isreal(L).all(), "L\n", L
+
+    assym = np.linalg.norm(L - L.T.conj())
+    print "assym L", I, assym
+
+    try:
+        Lambda, U = spla.eigh(L)
+    except spla.LinAlgError as err:
+        print >> sys.stderr, "symmNormalization: Error L", I, err
+
+    print "Lambda", Lambda
+    noZeros = np.count_nonzero(Lambda > 10 * thld)
+    Lambda[:Lambda.size - noZeros] = 0.
+    Lambda_s = np.sqrt(np.sqrt(Lambda))
+    Lambda_si = np.zeros(Lambda.shape, dtype=Lambda.dtype)
+    Lambda_si[-noZeros:] = 1. / Lambda_s[-noZeros:]
+
+    right = np.dot(U, np.diag(Lambda_si))
+    left = np.dot(np.diag(Lambda_s), U.conj().T)
+    C = np.tensordot(left, B, axes=([1,0]))
+    C = np.tensordot(C, right, axes=([1,0]))
+    C = np.transpose(C, (0, 2, 1))
+    C /= np.sqrt(omega)
+    print "Lambda", Lambda, "\nLambda_s", Lambda_s, "\nLambda_si", Lambda_si
+
+    g_s = np.diag(np.sqrt(Lambda))
+    g_s /= np.sqrt(np.trace(np.dot(g_s, g_s)))
+    print "g_s", np.diag(g_s)
+
+    trg_s, normg_s, trlr = np.trace(g_s), np.linalg.norm(g_s), np.trace(np.dot(g_s, g_s))
+    Eg_s = linearOpForR(C, g_s).reshape(chir, chic)
+    g_sE = linearOpForL(C, g_s).reshape(chir, chic)
+    print "Trace(g_s)", trg_s, "Norm(g_s)", normg_s, "Trace(l * r)", trlr
+    print "E|r)-|r)", np.linalg.norm(Eg_s-g_s), "(l|E-(l|", np.linalg.norm(g_sE-g_s)
+    print "E|r)\n", Eg_s, "\n(l|E\n", g_sE
+
+    return g_s, C
+
 def symmNormalization(MPS, chir, chic):
     print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
 
@@ -331,12 +403,17 @@ def nullSpaceL(MPS, Lambda):
 
     return tmp
 
-def calcFs(MPS, C, Lambda, K, VR):
+def calcFs(MPS, C, Lambda, K, VR, thld = 1.e-10):
     VRdag = np.transpose(np.conjugate(VR), (1, 0, 2))
-    Ld = np.diag(Lambda)
-    Lsqrt = Rsqrt = np.diag(np.sqrt(Ld))
-    Lsqrti = Rsqrti = np.diag(np.sqrt(1. / Ld))
     A = np.transpose(np.conjugate(MPS), (1, 0, 2))
+
+    Ld = np.diag(Lambda)
+    noZeros = np.count_nonzero(Ld > thld)
+    Ld_s = np.sqrt(Ld)
+    Lsqrt = Rsqrt = np.diag(Ld_s)
+    Ld_si = np.zeros(Ld.shape, dtype=Ld.dtype)
+    Ld_si[-noZeros:] = 1. / Ld_s[-noZeros:]
+    Lsqrti = Rsqrti = np.diag(Ld_si)#np.diag(np.sqrt(1. / Ld))
 
     RsiVRdag = np.tensordot(Rsqrti, VRdag, axes=([1,0]))
     ARsiVRdag = np.tensordot(A, RsiVRdag, axes=([1,0]))
@@ -363,8 +440,13 @@ def calcFs(MPS, C, Lambda, K, VR):
 
     return tmp
 
-def getUpdateB(Lambda, x, VR):
-    Rsqrti = Lsqrti = np.diag(np.sqrt(1. / np.diag(Lambda)))
+def getUpdateB(Lambda, x, VR, thld = 1.e-10):
+    Ld = np.diag(Lambda)
+    noZeros = np.count_nonzero(Ld > thld)
+    Ld_s = np.sqrt(Ld)
+    Ld_si = np.zeros(Ld.shape, dtype=Ld.dtype)
+    Ld_si[-noZeros:] = 1. / Ld_s[-noZeros:]
+    Rsqrti = Lsqrti = np.diag(Ld_si)#np.diag(np.sqrt(1. / np.diag(Lambda)))
     row, col, aux = VR.shape
 
     if row * col == 0:
@@ -469,8 +551,13 @@ def calcZ01andZ10(Y, MPS):
 
     return Z01, Z10
 
-def getB01andB10(Z01, Z10, Lambda, VL, VR):
-    L_si = R_si = np.diag(1. / np.sqrt(np.diag(Lambda)))
+def getB01andB10(Z01, Z10, Lambda, VL, VR, thld = 1.e-10):
+    Ld = np.diag(Lambda)
+    noZeros = np.count_nonzero(Ld > thld)
+    Ld_s = np.sqrt(Ld)
+    Ld_si = np.zeros(Ld.shape, dtype=Ld.dtype)
+    Ld_si[-noZeros:] = 1. / Ld_s[-noZeros:]
+    L_si = R_si = np.diag(Ld_si)#np.diag(1. / np.sqrt(np.diag(Lambda)))
     # print "Lambda_si\n", L_si
 
     row, col = Z01.shape
@@ -530,20 +617,21 @@ def doDynamicExpansion(MPS, Lambda, C, VR, B):
 
 """Main...
 """
-np.random.seed(9)
+#np.random.seed(9)
 d, xi, xiTilde = 2, 1, 2
 Jex, mHz = 1.0, float(sys.argv[1])
 I, maxIter, expS, dTau = 0, 9000, 1.e-12, 0.1
 
 xir = xic = xi
 theMPS = np.ones((xir, xic, d))
-theMPS = np.random.rand(xir, xic, d) - .5# + 1j * (np.random.rand(xir, xic, d) - .5)
+#theMPS = np.random.rand(xir, xic, d) - .5# + 1j * (np.random.rand(xir, xic, d) - .5)
 print "theMPS", type(theMPS), theMPS.dtype, "\n", theMPS
 
 theH = buildLocalH(Jex, mHz)
 
 while True:#I != maxIter:
-    theL, theMPS = symmNormalization(theMPS, xir, xic)
+    theL, theMPS = symmNormNew(theMPS, xir, xic)
+    #theL, theMPS = symmNormalization(theMPS, xir, xic)
     print "theMPS\n", theMPS, "\ntheL\n", theL
 
     meanVals(theMPS, theL)
@@ -566,7 +654,7 @@ while True:#I != maxIter:
     eta, thold = np.linalg.norm(theF), 1.e-5 if xi == 1 else 100 * expS
     print "eta", I, eta, xi, xiTilde
     if eta < thold:
-        if xiTilde < 33:
+        if xiTilde < 65:
             theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
             xi, xiTilde = xir, xiTilde * d
             print "InMain", xi, xir, xic, xiTilde, theMPS.shape
