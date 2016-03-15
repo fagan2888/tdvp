@@ -58,7 +58,7 @@ def buildLargeE(MPS):
 
     return AA
 
-def getLargestW(MPS, way):
+def getLargestW(MPS, way, guess):
     chir, chic, aux = MPS.shape
 
     if way == 'R': linOpWrapped = functools.partial(linearOpForR, MPS)
@@ -69,7 +69,7 @@ def getLargestW(MPS, way):
                                          dtype = MPS.dtype)
     try:
         omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = expS, 
-                               maxiter = maxIter, ncv = 12)
+                               maxiter = maxIter, ncv = 12, v0 = guess)
     except spspla.ArpackNoConvergence as err:
         print >> sys.stderr, "getLargestW: Error", I, err
         omega, X = powerMethod(MPS, way, err.eigenvectors)
@@ -88,10 +88,10 @@ def fixPhase(X):
 
     return Y
 
-def symmNormNew(MPS, chir, chic, thld = 1.e-10):
+def symmNormNew(MPS, chir, chic, guess, thld = 1.e-10):
     print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
 
-    omega, R = getLargestW(MPS, 'R')
+    omega, R = getLargestW(MPS, 'R', guess)
     R = fixPhase(R)
     if np.isreal(R).all(): omega, R = omega.real, R.real
     print "wR", omega, np.isreal(R).all(), "R\n", R
@@ -119,7 +119,7 @@ def symmNormNew(MPS, chir, chic, thld = 1.e-10):
     B /= np.sqrt(omega)
     print "Rvals", Rvals, "\nRvals_s", Rvals_s, "\nRvals_si", Rvals_si
 
-    omega, L = getLargestW(B, 'L')
+    omega, L = getLargestW(B, 'L', guess)
     L = fixPhase(L)
     if np.isreal(L).all(): omega, L = omega.real, L.real
     print "wL", omega, np.isreal(L).all(), "L\n", L
@@ -316,7 +316,7 @@ def linearOpForK(MPS, Lambda, K):
 
     return lhs.reshape(chir * chic)
 
-def calcHmeanval(MPS, R, C):
+def calcHmeanval(MPS, R, C, guess):
     chir, chic, aux = MPS.shape
     QHAAAAR = getQHaaaaR(MPS, R, C)
 
@@ -326,7 +326,7 @@ def calcHmeanval(MPS, R, C):
                                          dtype = MPS.dtype)
 
     K, info = spspla.lgmres(linOpForLsol, QHAAAAR, tol = expS, 
-                            maxiter = maxIter)
+                            maxiter = maxIter, x0 = guess.reshape(chir * chic))
     if info > 0:
         K, info = spspla.gmres(linOpForLsol, QHAAAAR, tol = expS, x0 = K, 
                                maxiter = maxIter)
@@ -613,6 +613,17 @@ def doDynamicExpansion(MPS, Lambda, C, VR, B):
 
     return nA, nXir, nXic
 
+def appendThem(A, L, K):
+    chir, chic, __ = A.shape
+    oxir, oxic = K.shape
+
+    nL, nK = np.zeros((chir, chic)), np.zeros((chir, chic))
+    nL[:oxir, :oxic] = L
+    nK[:oxir, :oxic] = K
+    # print "append L\n", nL, "\nappend K\n", nK
+
+    return nL, nK
+
 
 
 """Main...
@@ -625,13 +636,13 @@ I, maxIter, expS, dTau = 0, 9000, 1.e-12, 0.1
 xir = xic = xi
 theMPS = np.ones((xir, xic, d))
 #theMPS = np.random.rand(xir, xic, d) - .5# + 1j * (np.random.rand(xir, xic, d) - .5)
+theL, theK = np.random.rand(xir, xic) - .5, np.random.rand(xir, xic) - .5
 print "theMPS", type(theMPS), theMPS.dtype, "\n", theMPS
 
 theH = buildLocalH(Jex, mHz)
 
 while True:#I != maxIter:
-    theL, theMPS = symmNormNew(theMPS, xir, xic)
-    #theL, theMPS = symmNormalization(theMPS, xir, xic)
+    theL, theMPS = symmNormNew(theMPS, xir, xic, theL)
     print "theMPS\n", theMPS, "\ntheL\n", theL
 
     meanVals(theMPS, theL)
@@ -639,7 +650,7 @@ while True:#I != maxIter:
     theC = buildHElements(theMPS, theH)
     print "theC =", theC.shape
 
-    theK = calcHmeanval(theMPS, theL, theC)
+    theK = calcHmeanval(theMPS, theL, theC, theK)
     print "theK =", theK.shape
 
     theVR = nullSpaceR(theMPS, theL)
@@ -658,6 +669,7 @@ while True:#I != maxIter:
             theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
             xi, xiTilde = xir, xiTilde * d
             print "InMain", xi, xir, xic, xiTilde, theMPS.shape
+            theL, theK = appendThem(theMPS, theL, theK)
         else:
             break
     else:
