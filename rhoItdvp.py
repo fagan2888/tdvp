@@ -83,7 +83,7 @@ def getLargestW(MPS, way, guess):
 
 def fixPhase(X):
     Y = X / np.trace(X)
-    norm = np.linalg.norm(Y)
+    norm = 1.#np.linalg.norm(Y)
     Y = Y / norm
 
     return Y
@@ -133,7 +133,7 @@ def symmNormNew(MPS, chir, chic, guess, thld = 1.e-10):
         print >> sys.stderr, "symmNormalization: Error L", I, err
 
     print "Lambda", Lambda
-    noZeros = np.count_nonzero(Lambda > 10 * thld)
+    noZeros = np.count_nonzero(Lambda > thld)
     Lambda[:Lambda.size - noZeros] = 0.
     Lambda_s = np.sqrt(np.sqrt(Lambda))
     Lambda_si = np.zeros(Lambda.shape, dtype=Lambda.dtype)
@@ -275,7 +275,7 @@ def buildHElements(MPS, H):
     # C = np.transpose(tmp, (2, 3, 0, 1))
     tmp = np.transpose(tmp, (2, 1, 0, 3))
     C = np.transpose(tmp, (0, 3, 2, 1))
-    print "C", C.shape, "\n", C
+    print "C", C.shape#, "\n", C
 
     return C
 
@@ -483,16 +483,14 @@ def supOp(A, B, way, Op, X):
         XBdag = np.tensordot(X, Bdag, axes=([1,0]))
         AXBdag = np.tensordot(A, XBdag, axes=([1,0]))
         OpAXBdag = np.tensordot(Op, AXBdag, axes=([0,1], [3,1]))
-        print "Shape supOp R", OpAXBdag.shape
-        print OpAXBdag
+        # print "Shape supOp R", OpAXBdag.shape, "\n", OpAXBdag
 
         return OpAXBdag
     else:
         XA = np.tensordot(X, A, axes=([1,0]))
         BdagXA = np.tensordot(Bdag, XA, axes=([1,0]))
         OpBdagXA = np.tensordot(Op, BdagXA, axes=([0,1], [1,3]))
-        print "Shape supOp L", OpBdagXA.shape
-        print OpBdagXA
+        # print "Shape supOp L", OpBdagXA.shape, "\n", OpBdagXA
 
         return OpBdagXA
 
@@ -636,7 +634,7 @@ I, maxIter, expS, dTau = 0, 9000, 1.e-12, 0.1
 xir = xic = xi
 theMPS = np.ones((xir, xic, d))
 #theMPS = np.random.rand(xir, xic, d) - .5# + 1j * (np.random.rand(xir, xic, d) - .5)
-theL, theK = np.random.rand(xir, xic) - .5, np.random.rand(xir, xic) - .5
+theL, theK = np.random.rand(xir, xic) - .5, np.random.rand(xir, xic) - .5; theL += theL.T
 print "theMPS", type(theMPS), theMPS.dtype, "\n", theMPS
 
 theH = buildLocalH(Jex, mHz)
@@ -667,7 +665,7 @@ while True:#I != maxIter:
     if eta < thold:
         if xiTilde < 65:
             theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
-            xi, xiTilde = xir, xiTilde * d
+            xi, xiTilde = xir, xir * d
             print "InMain", xi, xir, xic, xiTilde, theMPS.shape
             theL, theK = appendThem(theMPS, theL, theK)
         else:
