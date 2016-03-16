@@ -68,7 +68,7 @@ def getLargestW(MPS, way, guess):
                                          matvec = linOpWrapped, 
                                          dtype = MPS.dtype)
     try:
-        omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = expS, 
+        omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = 1.e-14, 
                                maxiter = maxIter, ncv = 12, v0 = guess)
     except spspla.ArpackNoConvergence as err:
         print >> sys.stderr, "getLargestW: Error", I, err
@@ -325,7 +325,7 @@ def calcHmeanval(MPS, R, C, guess):
                                          matvec = linOpWrapped, 
                                          dtype = MPS.dtype)
 
-    K, info = spspla.lgmres(linOpForLsol, QHAAAAR, tol = expS, 
+    K, info = spspla.lgmres(linOpForLsol, QHAAAAR, tol = 1.e-14, 
                             maxiter = maxIter, x0 = guess.reshape(chir * chic))
     if info > 0:
         K, info = spspla.gmres(linOpForLsol, QHAAAAR, tol = expS, x0 = K, 
@@ -627,13 +627,13 @@ def appendThem(A, L, K):
 """Main...
 """
 #np.random.seed(9)
-d, xi, xiTilde = 2, 1, 2
+d, xi, xiTilde = 2, 4, 8
 Jex, mHz = 1.0, float(sys.argv[1])
 I, maxIter, expS, dTau = 0, 9000, 1.e-12, 0.1
 
 xir = xic = xi
 theMPS = np.ones((xir, xic, d))
-#theMPS = np.random.rand(xir, xic, d) - .5# + 1j * (np.random.rand(xir, xic, d) - .5)
+theMPS = np.random.rand(xir, xic, d) - .5# + 1j * (np.random.rand(xir, xic, d) - .5)
 theL, theK = np.random.rand(xir, xic) - .5, np.random.rand(xir, xic) - .5; theL += theL.T
 print "theMPS", type(theMPS), theMPS.dtype, "\n", theMPS
 
@@ -660,10 +660,10 @@ while True:#I != maxIter:
     theB = getUpdateB(theL, theF, theVR)
     print "theB =", theB.shape
 
-    eta, thold = np.linalg.norm(theF), 1.e-5 if xi == 1 else 100 * expS
+    eta, thold = np.linalg.norm(theF), 1.e-5 if xi == 1 else 1.e8 * expS
     print "eta", I, eta, xi, xiTilde
     if eta < thold:
-        if xiTilde < 65:
+        if xiTilde < 1965:
             theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
             xi, xiTilde = xir, xir * d
             print "InMain", xi, xir, xic, xiTilde, theMPS.shape
