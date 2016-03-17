@@ -8,7 +8,7 @@ import functools
 import cmath
 import sys
 
-np.set_printoptions(suppress=True)#, precision=3)
+np.set_printoptions(suppress=True, precision=13)
 
 def powerMethod(MPS, way, guess=None):
     eVal = 1234.5678
@@ -68,7 +68,7 @@ def getLargestW(MPS, way, guess):
                                          matvec = linOpWrapped, 
                                          dtype = MPS.dtype)
     try:
-        omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = 1.e-14, 
+        omega, X = spspla.eigs(linOpForEigs, k = 1, which = 'LR', tol = 1.e-13, 
                                maxiter = maxIter, ncv = 12, v0 = guess)
     except spspla.ArpackNoConvergence as err:
         print >> sys.stderr, "getLargestW: Error", I, err
@@ -88,7 +88,7 @@ def fixPhase(X):
 
     return Y
 
-def symmNormNew(MPS, chir, chic, guess, thld = 1.e-10):
+def symmNormNew(MPS, chir, chic, guess, thld = 1.e-13):
     print 5*"\t", 15*"#", "ITERATION =", I, 15*"#"
 
     omega, R = getLargestW(MPS, 'R', guess)
@@ -158,7 +158,7 @@ def symmNormNew(MPS, chir, chic, guess, thld = 1.e-10):
     print "E|r)-|r)", np.linalg.norm(Eg_s-g_s), "(l|E-(l|", np.linalg.norm(g_sE-g_s)
     print "E|r)\n", Eg_s, "\n(l|E\n", g_sE
 
-    g_s, C, __ = truncation(C, g_s)
+    # g_s, C, __ = truncation(C, g_s)
 
     return g_s, C
 
@@ -236,17 +236,17 @@ def buildLocalH(Jh, Hz):
     The local H is a (d, d, d, d)-rank tensor.
     """
     # S = 1 (d = 3)
-    # Sx = np.array([[0., 1., 0.], [1., 0., 1.], [0., 1., 0.]])
-    # Sy = np.array([[0., -1.j, 0.], [1.j, 0., -1.j], [0., 1.j, 0.]])
-    # Sz, Id = np.diag([1., 0., -1.]), np.eye(d)
-    # localH = .5 * (np.kron(Sx, Sx) + np.kron(Sy, Sy)) + np.kron(Sz, Sz)
-    # S = 1/2 (d = 2)
     dLoc = d#int(np.sqrt(d))
-    Sx, Sy = np.array([[0., 1.], [1., 0.]]), np.array([[0., -1.j], [1.j, 0.]])
-    Sz, Id = np.diag([1., -1.]), np.eye(dLoc)
-    # XY + transverse field
-    localH = Jh * np.kron(Sx, Sx) + Jh * np.kron(Sy, Sy) \
-             + (Hz / 2.) * (np.kron(Sz, Id) + np.kron(Id, Sz))
+    Sx = np.array([[0., 1., 0.], [1., 0., 1.], [0., 1., 0.]])
+    Sy = np.array([[0., -1.j, 0.], [1.j, 0., -1.j], [0., 1.j, 0.]])
+    Sz, Id = np.diag([1., 0., -1.]), np.eye(d)
+    localH = .5 * (np.kron(Sx, Sx) + np.kron(Sy, Sy)) + np.kron(Sz, Sz)
+    # S = 1/2 (d = 2)
+    # Sx, Sy = np.array([[0., 1.], [1., 0.]]), np.array([[0., -1.j], [1.j, 0.]])
+    # Sz, Id = np.diag([1., -1.]), np.eye(dLoc)
+    # # XY + transverse field
+    # localH = Jh * np.kron(Sx, Sx) + Jh * np.kron(Sy, Sy) \
+    #          + (Hz / 2.) * (np.kron(Sz, Id) + np.kron(Id, Sz))
     # # Heisenberg chain
     # localH = .25 * (np.kron(Sx, Sx) + np.kron(Sy, Sy) + np.kron(Sz, Sz))
     print "theH", "dLoc", dLoc, "Jex", Jh, "Hz", Hz, "\n", localH.real
@@ -277,7 +277,7 @@ def buildHElements(MPS, H):
     # C = np.transpose(tmp, (2, 3, 0, 1))
     tmp = np.transpose(tmp, (2, 1, 0, 3))
     C = np.transpose(tmp, (0, 3, 2, 1))
-    print "C", C.shape#, "\n", C
+    # print "C", C.shape, "\n", C
 
     return C
 
@@ -328,7 +328,7 @@ def calcHmeanval(MPS, R, C, guess):
                                          matvec = linOpWrapped, 
                                          dtype = MPS.dtype)
 
-    K, info = spspla.lgmres(linOpForLsol, QHAAAAR, tol = 1.e-14, 
+    K, info = spspla.lgmres(linOpForLsol, QHAAAAR, tol = 1.e-13, 
                             maxiter = maxIter, x0 = guess.reshape(chir * chic))
     if info > 0:
         K, info = spspla.gmres(linOpForLsol, QHAAAAR, tol = expS, x0 = K, 
@@ -406,7 +406,7 @@ def nullSpaceL(MPS, Lambda):
 
     return tmp
 
-def calcFs(MPS, C, Lambda, K, VR, thld = 1.e-10):
+def calcFs(MPS, C, Lambda, K, VR, thld = 1.e-13):
     VRdag = np.transpose(np.conjugate(VR), (1, 0, 2))
     A = np.transpose(np.conjugate(MPS), (1, 0, 2))
 
@@ -443,7 +443,7 @@ def calcFs(MPS, C, Lambda, K, VR, thld = 1.e-10):
 
     return tmp
 
-def getUpdateB(Lambda, x, VR, thld = 1.e-10):
+def getUpdateB(Lambda, x, VR, thld = 1.e-13):
     Ld = np.diag(Lambda)
     noZeros = np.count_nonzero(Ld > thld)
     Ld_s = np.sqrt(Ld)
@@ -499,7 +499,7 @@ def supOp(A, B, way, Op, X):
 
 def meanVals(A, Lambda):
     R = L = Lambda
-    Sz = np.diag([1., -1.])#np.kron(np.diag([1., -1.]), np.eye(np.sqrt(d)))
+    Sz = np.diag([1., 0., -1.])#np.kron(np.diag([1., -1.]), np.eye(np.sqrt(d)))
     toR = supOp(A, A, 'R', Sz, R)
     mvSz = np.trace(np.dot(L, toR))
     #toL = supOp(A, A, 'L', Sz, L)
@@ -552,7 +552,7 @@ def calcZ01andZ10(Y, MPS):
 
     return Z01, Z10
 
-def getB01andB10(Z01, Z10, Lambda, VL, VR, thld = 1.e-10):
+def getB01andB10(Z01, Z10, Lambda, VL, VR, thld = 1.e-13):
     Ld = np.diag(Lambda)
     noZeros = np.count_nonzero(Ld > thld)
     Ld_s = np.sqrt(Ld)
@@ -625,7 +625,7 @@ def appendThem(A, L, K):
 
     return nL, nK
 
-def truncation(MPS, Lambda, thld = 1.e-10):
+def truncation(MPS, Lambda, thld = 1.e-13):
     global xi, xir, xic, xiTilde
     truncate, whenToTrunc = False, d
     chi, chi, __ = MPS.shape
@@ -651,9 +651,9 @@ def truncation(MPS, Lambda, thld = 1.e-10):
 """Main...
 """
 #np.random.seed(9)
-d, xi, xiTilde = 2, 4, 8
+d, xi, xiTilde = 3, 3, 6
 Jex, mHz = 1.0, float(sys.argv[1])
-I, maxIter, expS, dTau = 0, 9000, 1.e-12, 0.1
+I, maxIter, expS, dTau = 0, 9000, 1.e-13, 0.1
 
 xir = xic = xi
 theMPS = np.ones((xir, xic, d))
@@ -684,12 +684,12 @@ while True:#I != maxIter:
     theB = getUpdateB(theL, theF, theVR)
     print "theB =", theB.shape
 
-    eta, thold = np.linalg.norm(theF), 1.e-5 if xi == 1 else 1.e8 * expS
+    eta, thold = np.linalg.norm(theF), 1.e-5 if xi == 1 else 1.e-6
     print "eta", I, eta, xi, xiTilde
     if eta < thold:
         if xiTilde < 1965:
             theMPS, xir, xic = doDynamicExpansion(theMPS, theL, theC, theVR, theB)
-            xi, xiTilde = xir, xir * d
+            xi, xiTilde = xir, xir + xir / 2
             print "InMain", xi, xir, xic, xiTilde, theMPS.shape
             theL, theK = appendThem(theMPS, theL, theK)
         else:
