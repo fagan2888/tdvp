@@ -158,6 +158,8 @@ def symmNormNew(MPS, chir, chic, guess, thld = 1.e-10):
     print "E|r)-|r)", np.linalg.norm(Eg_s-g_s), "(l|E-(l|", np.linalg.norm(g_sE-g_s)
     print "E|r)\n", Eg_s, "\n(l|E\n", g_sE
 
+    g_s, C, __ = truncation(C, g_s)
+
     return g_s, C
 
 def symmNormalization(MPS, chir, chic):
@@ -319,6 +321,7 @@ def linearOpForK(MPS, Lambda, K):
 def calcHmeanval(MPS, R, C, guess):
     chir, chic, aux = MPS.shape
     QHAAAAR = getQHaaaaR(MPS, R, C)
+    if (chir, chic) < guess.shape: guess = guess[-chir:, -chic:]
 
     linOpWrapped = functools.partial(linearOpForK, MPS, R)
     linOpForLsol = spspla.LinearOperator((chir * chir, chic * chic), 
@@ -621,6 +624,27 @@ def appendThem(A, L, K):
     # print "append L\n", nL, "\nappend K\n", nK
 
     return nL, nK
+
+def truncation(MPS, Lambda, thld = 1.e-10):
+    global xi, xir, xic, xiTilde
+    truncate, whenToTrunc = False, d
+    chi, chi, __ = MPS.shape
+    newChi = np.count_nonzero(Lambda > thld)
+
+    if newChi < chi and chi - newChi > whenToTrunc:
+        truncate = True
+        Lambda = np.diag(Lambda)
+        newLambda = np.diag(Lambda[-newChi:])
+        newMPS = MPS[-newChi:, -newChi:, :]
+        xir, xic, __ = newMPS.shape
+        xi, xi, __ = newMPS.shape
+        xiTilde = xi * d
+        print "truncation: reducing from", chi, "to", newChi, xi
+        newLambda, newMPS = symmNormNew(newMPS, xir, xic, newLambda)
+
+        return newLambda, newMPS, truncate
+
+    return Lambda, MPS, truncate
 
 
 
